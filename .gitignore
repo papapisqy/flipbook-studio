@@ -1,0 +1,12 @@
+# Local environment and credentials
+.env.local
+.env.*.local
+
+# Dependencies and generated output
+node_modules/
+dist/
+*.tsbuildinfo
+
+# Local tooling
+.vite/
+coverage/

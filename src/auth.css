@@ -1,0 +1,67 @@
+.app-shell:has(.auth-page) .topbar {
+  display: none;
+}
+
+.auth-page {
+  align-items: center;
+  background: #0f131c;
+  color: #dfe2ef;
+  display: flex;
+  font-family: Inter, "Segoe UI", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2.5rem 1.5rem;
+}
+.auth-shell { display: grid; grid-template-columns: minmax(300px, .9fr) minmax(380px, 1.1fr); max-width: 1040px; overflow: hidden; width: 100%; border-radius: 18px; box-shadow: 0 24px 80px #0008; }
+.auth-showcase { background: linear-gradient(155deg,#1c1f29,#262a34); display: flex; flex-direction: column; gap: 2rem; justify-content: space-between; min-height: 560px; padding: 2.5rem; }
+.auth-brand { align-items: center; display: flex; gap: .75rem; }
+.auth-brand .brand-mark { display: none; }
+.auth-brand::before { background: url('/flipbook-studio-logo.png') center / contain no-repeat; content: ''; display: block; flex: 0 0 156px; height: 72px; }
+.auth-brand strong { display: block; font-size: 1.1rem; font-weight: 750; letter-spacing: -.02em; }
+.auth-brand small { color: #c0c1ff; display: block; font-size: .65rem; font-weight: 700; letter-spacing: .13em; margin-top: .25rem; }
+.auth-showcase h2 { font-size: clamp(2rem,3vw,2.7rem); font-weight: 750; letter-spacing: -.045em; line-height: 1.08; margin: 0; }
+.auth-showcase p { color: #c7c4d7; line-height: 1.65; }
+.auth-feature { background: #31353f99; border: 1px solid #908fa044; border-radius: 10px; padding: 1rem; }
+.auth-feature strong,.auth-feature span,.auth-feature small { display: block; }
+.auth-feature span,.auth-feature small { color: #c7c4d7; font-size: .78rem; margin-top: .35rem; }
+.auth-feature hr { border: 0; border-top: 1px solid #908fa044; margin: .9rem 0; }
+.auth-card { background: #181b25; border: 0; border-radius: 0; color: #dfe2ef; display: grid; gap: .85rem; min-width: 0; padding: 3rem; }
+.auth-card h1 { color: #dfe2ef; font-size: clamp(2rem,3vw,2.55rem); font-weight: 750; letter-spacing: -.04em; line-height: 1.08; margin: .25rem 0; }
+.auth-card > p:not(.auth-error) { color: #c7c4d7; font-size: .98rem; line-height: 1.55; margin: 0 0 1rem; }
+.auth-card label { color: #dfe2ef; display: flex; flex-direction: column; font-size: .9rem; font-weight: 600; gap: .5rem; line-height: 1.35; }
+.auth-card input { background: #0a0e17; border: 1px solid #464554; border-radius: 8px; box-sizing: border-box; color: #dfe2ef; font-size: 1rem; font-weight: 450; letter-spacing: .005em; min-height: 48px; padding: .75rem .85rem; width: 100%; }
+.auth-card input:focus { border-color: #c0c1ff; box-shadow: 0 0 0 2px #c0c1ff33; outline: 0; }
+.auth-kicker { color: #d0bcff; font-size: .68rem; font-weight: 700; letter-spacing: .1em; }
+.auth-meta { align-items: center; display: flex; font-size: .75rem; justify-content: space-between; }
+.auth-meta > span { color: #8fe0b8; }
+.auth-meta .remember { align-items: center; display: flex; flex-direction: row; font-weight: 400; gap: .45rem; }
+.auth-meta .remember input { accent-color: #8083ff; width: auto; }
+.auth-submit {
+  align-items: center;
+  background: linear-gradient(120deg, #315bea 0%, #2549cf 45%, #7048e8 100%);
+  background-size: 180% 180%;
+  display: flex;
+  justify-content: center;
+  margin-top: .5rem;
+  position: relative;
+  transition: background-position .35s ease, box-shadow .2s ease, filter .2s ease, transform .2s ease;
+  will-change: transform, background-position;
+}
+.auth-submit:hover:not(:disabled) {
+  background-position: 100% 50%;
+  box-shadow: 0 12px 28px rgba(49, 91, 234, .36), 0 0 0 1px rgba(174, 181, 255, .22);
+  filter: saturate(1.12) brightness(1.06);
+  transform: translateY(-2px);
+}
+.auth-submit:active:not(:disabled) { transform: translateY(0) scale(.985); }
+.auth-submit:focus-visible {
+  box-shadow: 0 0 0 3px #181b25, 0 0 0 6px #aeb5ff;
+  outline: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .auth-submit { transition: none; }
+}
+.auth-footer { display: none; }
+@media (max-width: 760px) { .auth-shell { grid-template-columns: 1fr; } .auth-showcase { min-height: auto; padding: 2rem; } .auth-card { padding: 2rem; } }
+.auth-error { background: #3a2028; border: 1px solid #b95b71; border-radius: 8px; color: #ffb9c8; line-height: 1.45; margin: 0; padding: .75rem; }
+.auth-reader-link { display: none; }

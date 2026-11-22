@@ -1,0 +1,9 @@
+[functions.submit-activity]
+# Students authenticate with an attempt-bound activity session token. The
+# function performs its own validation; deployment remains pending security audit.
+verify_jwt = false
+
+[functions.start-activity-session]
+# Public student entry point. The function validates an attempt-bound opaque
+# token contract; deployment is blocked pending the security audit package.
+verify_jwt = false

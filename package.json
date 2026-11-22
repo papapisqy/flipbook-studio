@@ -1,0 +1,29 @@
+{
+  "name": "flipbook-studio",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest run",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.119.1",
+    "@vitejs/plugin-react": "latest",
+    "pdfjs-dist": "^6.5.438",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-pageflip": "^2.0.3",
+    "react-router-dom": "^7.18.5",
+    "typescript": "latest",
+    "vite": "latest"
+  },
+  "devDependencies": {
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "supabase": "^3.2.0",
+    "vitest": "^5.1.1"
+  }
+}
