@@ -65,3 +65,523 @@
 @media (max-width: 760px) { .auth-shell { grid-template-columns: 1fr; } .auth-showcase { min-height: auto; padding: 2rem; } .auth-card { padding: 2rem; } }
 .auth-error { background: #3a2028; border: 1px solid #b95b71; border-radius: 8px; color: #ffb9c8; line-height: 1.45; margin: 0; padding: .75rem; }
 .auth-reader-link { display: none; }
+
+/* Keep the journal login canvas light and cheerful after the base auth theme. */
+.auth-page.journal-login {
+  background:
+    radial-gradient(circle at 14% 16%, rgba(166, 220, 255, .92) 0, rgba(166, 220, 255, 0) 31%),
+    radial-gradient(circle at 86% 15%, rgba(255, 209, 162, .82) 0, rgba(255, 209, 162, 0) 29%),
+    radial-gradient(circle at 78% 88%, rgba(184, 239, 203, .86) 0, rgba(184, 239, 203, 0) 34%),
+    linear-gradient(135deg, #fff7e8 0%, #f7efff 48%, #e8f8ff 100%) !important;
+}
+
+.journal-brand {
+  width: 100%;
+  justify-content: flex-start;
+  gap: .45rem;
+}
+
+.journal-brand time { margin-left: .35rem; }
+.journal-brand img { flex: 0 0 130px; width: 130px; }
+.journal-brand .journal-tape { margin-left: 0; }
+
+.journal-login .journal-password,
+.journal-login .journal-password input,
+.journal-login .journal-password button {
+  background: #f8f5ee !important;
+}
+
+.journal-login .journal-form > label > input {
+  border-radius: 7px !important;
+}
+
+.journal-login .journal-password {
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.journal-login .journal-password input { border-radius: 0 !important; }
+
+.journal-login .journal-password button {
+  display: grid;
+  width: 60px;
+  place-items: center;
+  border: 0;
+  border-left: 1px solid rgba(117, 88, 77, .14);
+  color: #75584d;
+  border-radius: 0 !important;
+}
+
+.journal-login .journal-password button svg {
+  width: 21px;
+  height: 21px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+}
+
+.journal-login .journal-submit {
+  background: linear-gradient(135deg, #4b9295 0%, #3b777d 100%) !important;
+  border: 1px solid rgba(31, 91, 96, .45);
+  box-shadow: 0 4px 8px rgba(43, 89, 92, .28);
+}
+
+.journal-login .journal-submit:hover:not(:disabled) {
+  background: linear-gradient(135deg, #5aa4a5 0%, #417f84 100%) !important;
+  box-shadow: 0 6px 12px rgba(43, 89, 92, .32);
+}
+
+.journal-login .journal-form input:-webkit-autofill,
+.journal-login .journal-form input:-webkit-autofill:hover,
+.journal-login .journal-form input:-webkit-autofill:focus {
+  -webkit-text-fill-color: #442a22;
+  -webkit-box-shadow: 0 0 0 1000px #f8f5ee inset;
+  transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Admin workspace — matched to the journal flipbook theme. */
+.app-shell:has(.admin-dashboard-page) { background: #f7f2e9 !important; }
+.admin-dashboard-page { background: linear-gradient(135deg, #fff7e8 0%, #f7efff 48%, #e8f8ff 100%) !important; color: #442a22 !important; }
+.admin-dashboard-page .admin-nav { background: linear-gradient(180deg, #1b3546, #295366) !important; border-color: rgba(255,255,255,.18) !important; color: #edf8f7 !important; }
+.admin-dashboard-page .admin-nav-brand { background-image: url('/flipbook-studio-logo.png') !important; background-size: contain !important; background-position: left center !important; }
+.admin-dashboard-page .admin-nav a { color: #d7eeee !important; border-radius: 9px !important; }
+.admin-dashboard-page .admin-nav a:hover { background: rgba(198,233,238,.16) !important; color: #fff !important; }
+.admin-dashboard-page .admin-nav a.is-current { background: linear-gradient(135deg, #5aa4a5, #3b777d) !important; box-shadow: 0 6px 14px rgba(8,35,45,.24) !important; }
+.admin-dashboard-page .workspace-switcher, .admin-dashboard-page .storage-card { background: rgba(255,255,255,.1) !important; border-color: rgba(198,233,238,.25) !important; color: #efffff !important; }
+.admin-dashboard-page .workspace { background: transparent !important; }
+.admin-dashboard-page .dashboard-hero > div:first-child { max-width: none !important; }
+.admin-dashboard-page .workspace-heading {
+  align-items: center;
+  margin: 1.25rem 0 1.5rem;
+  padding: 1.5rem 1.75rem;
+  border-left: 6px solid #5aa4a5;
+  border-radius: 16px;
+  background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px) !important;
+  box-shadow: 0 10px 24px rgba(90,75,53,.1);
+}
+.admin-dashboard-page .workspace-heading h1 { color: #442a22 !important; font-family: Caveat, "Segoe Print", cursive !important; font-size: clamp(2.25rem,4vw,3.4rem) !important; }
+.admin-dashboard-page .workspace-heading p:not(.eyebrow) { color: #705e55 !important; }
+.admin-dashboard-page .collection-panel { margin-top: 0 !important; }
+.admin-dashboard-page .collection-panel .panel-heading { padding-bottom: 1rem; border-bottom: 1px solid #eaded3; }
+
+/* Dialogs and popups share the same paper-and-pastel theme. */
+.modal-backdrop { background: rgba(54, 82, 86, .38) !important; backdrop-filter: blur(5px) !important; }
+.confirm-modal {
+  color: #442a22 !important;
+  border: 1px solid #d9ccba !important;
+  border-left: 6px solid #5aa4a5 !important;
+  border-radius: 16px !important;
+  background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px) !important;
+  box-shadow: 0 22px 60px rgba(50, 62, 63, .28) !important;
+}
+.confirm-modal h2, .confirm-modal strong { color: #442a22 !important; font-family: Caveat, "Segoe Print", cursive !important; }
+.confirm-modal > p:not(.eyebrow) { color: #705e55 !important; }
+.confirm-modal .eyebrow { color: #2b6267 !important; }
+.confirm-icon { background: #ffe6db !important; color: #8b4d3a !important; }
+.choice-card { background: #fffdfa !important; border-color: #cfe1df !important; color: #442a22 !important; }
+.choice-card:hover { background: #e9f5f4 !important; border-color: #7bb8b8 !important; box-shadow: 0 8px 18px rgba(65,120,122,.16) !important; }
+.choice-card span { color: #3b777d !important; }
+.choice-card small { color: #705e55 !important; }
+.confirm-modal .button.quiet { background: #fffdfa !important; border-color: #cbdedc !important; color: #2b6267 !important; }
+.confirm-modal .danger-solid { background: #c86d58 !important; border-color: #b95d49 !important; }
+.confirm-modal .danger-solid:hover { background: #ae543f !important; }
+.upload-field { color: #442a22 !important; }
+.upload-field input { background: #fffdfa !important; border-color: #cbdedc !important; color: #442a22 !important; }
+.upload-dropzone { color: #2b6267 !important; border-color: #7bb8b8 !important; background: rgba(216,238,240,.45) !important; }
+.upload-dropzone:hover { background: #d8eef0 !important; border-color: #5aa4a5 !important; }
+.upload-dropzone small { color: #705e55 !important; }
+
+.admin-dashboard-page .breadcrumbs { display: none !important; }
+a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: none; }
+.admin-dashboard-page .dashboard-profile, .admin-dashboard-page .dashboard-profile small { color: #5b4137 !important; }
+.admin-dashboard-page .avatar { background: linear-gradient(135deg, #5aa4a5, #e9a785) !important; }
+.admin-dashboard-page .dashboard-hero { background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px) !important; border-left-color: #5aa4a5 !important; color: #442a22 !important; box-shadow: 0 12px 28px rgba(90,75,53,.14) !important; }
+.admin-dashboard-page .dashboard-hero h1, .admin-dashboard-page .section-title h2, .admin-dashboard-page .panel-heading h2, .admin-dashboard-page .book-row strong { color: #442a22 !important; font-family: Caveat, "Segoe Print", cursive !important; }
+.admin-dashboard-page .dashboard-hero h1 { font-size: clamp(2.3rem, 4vw, 3.7rem) !important; }
+.admin-dashboard-page .dashboard-hero>div:first-child>p:last-child, .admin-dashboard-page .section-title span, .admin-dashboard-page .panel p, .admin-dashboard-page .book-row span { color: #705e55 !important; }
+.admin-dashboard-page .workspace-badge { background: #d8eef0 !important; color: #2b4c50 !important; }
+.admin-dashboard-page .workspace-badge em { color: #5e7273 !important; }
+.admin-dashboard-page .button.primary { background: linear-gradient(135deg, #5aa4a5, #3b777d) !important; box-shadow: 0 5px 12px rgba(43,89,92,.25) !important; }
+.admin-dashboard-page .button.primary:hover { background: linear-gradient(135deg, #68b0b0, #478a8e) !important; }
+.admin-dashboard-page .button.quiet, .admin-dashboard-page .button.compact { background: #fffdfa !important; border-color: #cbdedc !important; color: #2b6267 !important; }
+.admin-dashboard-page .reference-stats .stat, .admin-dashboard-page .panel, .admin-dashboard-page .analytics-card, .admin-dashboard-page .project-card { background: #fffdfa !important; border-color: #e4d7ca !important; box-shadow: 0 8px 20px rgba(90,75,53,.1) !important; }
+.admin-dashboard-page .publication-layout > .publications-panel { margin-top: 0 !important; }
+.admin-dashboard-page .reference-stats .stat span, .admin-dashboard-page .reference-stats .stat small, .admin-dashboard-page .analytics-card p { color: #7a6960 !important; }
+.admin-dashboard-page .reference-stats .stat strong, .admin-dashboard-page .analytics-card strong, .admin-dashboard-page .analytics-card h3 { color: #442a22 !important; }
+.admin-dashboard-page .project-card { color: #442a22 !important; }
+.admin-dashboard-page .project-card:hover { border-color: #7bb8b8 !important; box-shadow: 0 12px 24px rgba(65,120,122,.18) !important; }
+.admin-dashboard-page .project-card b { background: #d8eef0 !important; color: #2b6267 !important; }
+.admin-dashboard-page .project-card .project-pdf-icon svg { width: 27px; height: 27px; fill: none; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.7; }
+.admin-dashboard-page .project-card p { color: #705e55 !important; }
+.admin-dashboard-page .project-card strong, .admin-dashboard-page .panel-link { color: #3b777d !important; }
+.admin-dashboard-page .book-row { border-color: #eaded3 !important; }
+.admin-dashboard-page .book-thumb { background: linear-gradient(145deg, #b9e2e3, #78bfc0) !important; color: #20494d !important; }
+.admin-dashboard-page .status.neutral { background: #dceef5 !important; color: #38616f !important; }
+.admin-dashboard-page .status.draft { background: #fff0bd !important; color: #795b19 !important; }
+
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav { position: sticky; top: 0; z-index: 30; height: auto; background: #24495a !important; box-shadow: 0 3px 10px rgba(27,53,70,.18); }
+  .admin-dashboard-page .workspace { padding: 1.25rem 1rem !important; }
+}
+
+/* Remove dark dashboard remnants and keep controls in the pastel journal palette. */
+.admin-dashboard-page .storage-card { display: none !important; }
+.admin-dashboard-page .dashboard-profile { display: none !important; }
+.admin-dashboard-page .admin-nav { background: linear-gradient(180deg, #e6f4f4, #cfe9e8) !important; color: #2b4c50 !important; border-color: #b9d9d8 !important; }
+
+@media (min-width: 901px) {
+  .admin-dashboard-page .admin-nav-brand {
+    width: 100% !important;
+    margin: 0 0 1.4rem !important;
+    background-position: center !important;
+  }
+
+  .admin-dashboard-page .dashboard-hero > div:first-child > p:last-child {
+    max-width: none !important;
+    white-space: nowrap;
+  }
+}
+
+/* One consistent navigation vocabulary across every admin page. */
+.admin-dashboard-page .admin-nav-brand {
+  background-image: url('/flipbook-studio-logo.png') !important;
+  background-repeat: no-repeat !important;
+  background-size: contain !important;
+}
+
+.admin-dashboard-page .admin-nav a {
+  display: flex !important;
+  align-items: center;
+  gap: .7rem;
+  font-size: 0;
+}
+
+.admin-dashboard-page .admin-nav a span {
+  font-size: 1rem;
+  line-height: 1.25;
+}
+
+.admin-dashboard-page .admin-nav a::before {
+  display: inline-grid;
+  width: 1.15rem;
+  place-items: center;
+  flex: 0 0 1.15rem;
+  color: currentColor;
+  font-family: "Segoe UI Symbol", "Segoe UI", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.admin-dashboard-page .admin-nav a[href="/admin"]::before { content: "▦"; }
+.admin-dashboard-page .admin-nav a[href*="/admin/books"]::before { content: "▤"; }
+.admin-dashboard-page .admin-nav a[href="/admin/editor"]::before { content: "✦"; }
+.admin-dashboard-page .admin-nav a[href="/admin/settings"]::before { content: "⚙"; }
+.admin-dashboard-page .admin-nav a[href="/admin/about"]::before { content: "ⓘ"; }
+.admin-dashboard-page .admin-nav a[href*="editor"]::before { content: "✦"; }
+.admin-dashboard-page .admin-nav a { color: #2b6267 !important; }
+.admin-dashboard-page .admin-nav a:hover { background: #d7eeee !important; color: #20494d !important; }
+.admin-dashboard-page .admin-nav a.is-current { background: linear-gradient(135deg, #8bcaca, #62a9ab) !important; color: #173f43 !important; box-shadow: 0 5px 12px rgba(65,120,122,.18) !important; }
+.admin-dashboard-page .sidebar-logout { background: #ffe6db !important; border-color: #edc3b4 !important; color: #8b4d3a !important; box-shadow: none !important; }
+.admin-dashboard-page .sidebar-logout:hover { background: #ffd8c7 !important; border-color: #dfaa97 !important; color: #703725 !important; }
+.admin-dashboard-page .publication-tabs { background: #e7f0ef !important; border: 1px solid #cfe1df; }
+.admin-dashboard-page .publication-tabs span { color: #567579 !important; }
+.admin-dashboard-page .publication-tabs .active { background: #fffdfa !important; color: #2b6267 !important; box-shadow: 0 2px 5px rgba(65,120,122,.12); }
+
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav.is-open { background: linear-gradient(180deg, #e6f4f4, #cfe9e8) !important; box-shadow: 12px 0 28px rgba(65,120,122,.2) !important; }
+  .admin-dashboard-page .admin-menu-toggle { background: #5aa4a5 !important; }
+}
+
+@media (max-width: 680px) {
+  .admin-dashboard-page .dashboard-header { margin-bottom: 1rem; }
+  .admin-dashboard-page .dashboard-profile > div, .admin-dashboard-page .notification { display: none; }
+  .admin-dashboard-page .dashboard-hero { padding: 1.5rem 1.25rem !important; border-left-width: 6px !important; }
+  .admin-dashboard-page .dashboard-hero h1 { font-size: 2.45rem !important; }
+  .admin-dashboard-page .dashboard-actions .button { min-height: 46px; }
+  .admin-dashboard-page .reference-stats { gap: .75rem; margin-top: 1.25rem; }
+  .admin-dashboard-page .reference-stats .stat { min-height: 112px; padding: 1rem !important; }
+  .admin-dashboard-page .reference-stats .stat strong { margin-top: .65rem; font-size: 2rem; }
+  .admin-dashboard-page .project-section { margin-top: 2rem; }
+  .admin-dashboard-page .project-card { min-height: 0; padding: 1.25rem; }
+  .admin-dashboard-page .publication-layout { margin-top: 2rem; }
+  .admin-dashboard-page .panel { padding: 1rem; }
+  .admin-dashboard-page .book-row { gap: .6rem; }
+}
+
+.admin-menu-toggle { display: none; }
+.admin-dashboard-page .workspace-switcher { display: none !important; }
+
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav {
+    display: grid !important;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 0 !important;
+    overflow: visible !important;
+    padding: .65rem 1rem !important;
+  }
+
+  .admin-dashboard-page .admin-nav-brand {
+    display: block !important;
+    width: 155px !important;
+    height: 48px !important;
+    margin: 0 !important;
+  }
+
+  .admin-menu-toggle {
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-content: center;
+    gap: 5px;
+    border: 1px solid rgba(198,233,238,.45);
+    border-radius: 9px;
+    background: rgba(255,255,255,.1);
+  }
+
+  .admin-menu-toggle span { display: block; width: 19px; height: 2px; border-radius: 99px; background: #f4ffff; }
+  .admin-dashboard-page .admin-nav > a,
+  .admin-dashboard-page .admin-nav > .workspace-switcher,
+  .admin-dashboard-page .admin-nav > .storage-card { display: none !important; }
+  .admin-dashboard-page .admin-nav.is-open > a { display: block !important; grid-column: 1 / -1; margin: .15rem 0 !important; }
+  .admin-dashboard-page .admin-nav.is-open { padding-bottom: .85rem !important; }
+}
+
+.journal-mobile-logo { display: none; }
+
+@media (max-width: 760px) {
+  .journal-mobile-logo {
+    display: grid;
+    place-items: center;
+    min-height: 72px;
+    padding: .5rem 1rem;
+    background: repeating-linear-gradient(to bottom, #fdfbf7 0 23px, #ded2c8 24px, #fdfbf7 25px) !important;
+  }
+
+  .journal-mobile-logo img {
+    display: block;
+    width: min(160px, 52vw);
+    height: auto;
+    object-fit: contain;
+  }
+
+  .journal-form {
+    justify-content: flex-start !important;
+    min-height: 0 !important;
+    padding-top: 1.25rem !important;
+  }
+}
+
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    z-index: 60;
+    display: block !important;
+    width: 64px !important;
+    height: 64px !important;
+    min-height: 0 !important;
+    padding: .7rem !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transition: width .38s cubic-bezier(.22,.75,.25,1), height .38s cubic-bezier(.22,.75,.25,1), background .38s ease, box-shadow .38s ease;
+  }
+
+  .admin-dashboard-page .admin-nav-brand,
+  .admin-dashboard-page .admin-nav > a,
+  .admin-dashboard-page .admin-nav > .storage-card,
+  .admin-dashboard-page .admin-nav > .sidebar-logout { display: none !important; }
+
+  .admin-dashboard-page .admin-menu-toggle {
+    position: absolute;
+    top: .7rem;
+    left: .7rem;
+    z-index: 2;
+    display: grid;
+    background: #2b6267;
+    border-color: rgba(255,255,255,.5);
+    box-shadow: 0 4px 12px rgba(43,89,92,.22);
+  }
+
+  .admin-dashboard-page .admin-nav.is-open {
+    width: min(300px, 84vw) !important;
+    height: 100dvh !important;
+    padding: 1.25rem 1rem !important;
+    overflow-y: auto !important;
+    background: linear-gradient(180deg, #1b3546, #295366) !important;
+    box-shadow: 12px 0 28px rgba(27,53,70,.26) !important;
+  }
+
+  .admin-dashboard-page .admin-nav.is-open .admin-nav-brand {
+    display: block !important;
+    width: 175px !important;
+    height: 54px !important;
+    margin: 0 auto 1.5rem !important;
+    background-position: center !important;
+  }
+
+  .admin-dashboard-page .admin-nav.is-open > a {
+    display: block !important;
+    margin: .15rem 0 !important;
+    padding: .8rem !important;
+  }
+
+  .admin-dashboard-page .admin-nav.is-open > .sidebar-logout {
+    display: block !important;
+    margin-top: 1rem;
+  }
+
+  .admin-dashboard-page .admin-nav.is-open .admin-menu-toggle { left: auto; right: 1rem; }
+}
+
+/* Final mobile sidebar palette: mirrors the desktop pastel navigation. */
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav.is-open {
+    background: linear-gradient(180deg, #e6f4f4 0%, #cfe9e8 100%) !important;
+    border-right: 1px solid #b9d9d8 !important;
+    box-shadow: 12px 0 28px rgba(65,120,122,.2) !important;
+  }
+
+  .admin-dashboard-page .admin-nav.is-open a { color: #2b6267 !important; }
+  .admin-dashboard-page .admin-nav.is-open a:hover { background: #d7eeee !important; color: #20494d !important; }
+  .admin-dashboard-page .admin-nav.is-open a.is-current { background: linear-gradient(135deg, #8bcaca, #62a9ab) !important; color: #173f43 !important; }
+  .admin-dashboard-page .admin-nav.is-open .sidebar-logout { background: #ffe6db !important; border-color: #edc3b4 !important; color: #8b4d3a !important; }
+}
+
+/* Imported-PDF editor: same bright editorial system as the dashboard. */
+.pdf-import-editor {
+  min-height: 100dvh !important;
+  background: linear-gradient(135deg, #fff5ed 0%, #f5efff 47%, #e7f7fb 100%) !important;
+  color: #442a22 !important;
+}
+
+.pdf-import-editor .editor-bar {
+  display: flex !important;
+  padding: 1rem clamp(1rem, 4vw, 3rem) !important;
+  background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px) !important;
+  border-bottom: 1px solid #d9cbc0 !important;
+  color: #442a22 !important;
+}
+
+.pdf-import-editor .editor-bar h1 {
+  color: #442a22 !important;
+  font-family: Caveat, "Segoe Print", cursive !important;
+  font-size: clamp(1.7rem, 3vw, 2.35rem) !important;
+}
+
+.pdf-import-editor .editor-bar .eyebrow { color: #2b6267 !important; }
+.pdf-import-editor .save-status.saved { color: #2b7876 !important; }
+.pdf-import-editor .editor-bar .button.quiet,
+.pdf-import-editor .pdf-reader-toolbar .button.compact,
+.pdf-import-editor .share-tools .button.compact {
+  background: #fffdfa !important;
+  border-color: #bdd7d7 !important;
+  color: #2b6267 !important;
+  text-decoration: none !important;
+}
+
+.pdf-import-editor .pdf-reader-preview {
+  min-height: calc(100dvh - 92px) !important;
+  padding: clamp(.75rem, 2vw, 1.5rem) !important;
+  background: transparent !important;
+}
+
+.pdf-import-editor .pdf-reader-toolbar {
+  max-width: 1200px !important;
+  margin: 0 auto 1rem !important;
+  padding: .8rem 1rem !important;
+  background: rgba(255,253,250,.94) !important;
+  border: 1px solid #d9cbc0 !important;
+  border-radius: 14px !important;
+  box-shadow: 0 8px 20px rgba(86,67,50,.1) !important;
+  color: #442a22 !important;
+}
+
+.pdf-import-editor .pdf-reader-toolbar small,
+.pdf-import-editor .pdf-page-controls span { color: #705e55 !important; }
+.pdf-import-editor .status.draft { background: #fff0bd !important; color: #7b5817 !important; }
+.pdf-import-editor .flipbook-stage { min-height: calc(100dvh - 190px) !important; }
+.pdf-import-editor .uploaded-preview-card { background: #fffdfa !important; border: 1px solid #d9cbc0 !important; border-radius: 18px !important; box-shadow: 0 12px 28px rgba(86,67,50,.12) !important; color: #442a22 !important; }
+.pdf-import-editor .uploaded-preview-card h2 { color: #442a22 !important; font-family: Caveat, "Segoe Print", cursive !important; }
+.pdf-import-editor .uploaded-preview-card p:not(.eyebrow),
+.pdf-import-editor .render-progress-label { color: #705e55 !important; }
+.pdf-import-editor .pdf-badge { background: linear-gradient(135deg, #5aa4a5, #3b777d) !important; }
+.pdf-import-editor .render-progress { background: #dbeceb !important; }
+.pdf-import-editor .render-progress span { background: linear-gradient(90deg, #5aa4a5, #e6ad86) !important; }
+
+.pdf-editor-workspace { max-width: 1200px; margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); }
+.pdf-editor-intro { padding: 1.5rem 1.75rem; border-left: 8px solid #5aa4a5; border-radius: 18px; background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px); box-shadow: 0 10px 22px rgba(86,67,50,.1); }
+.pdf-editor-intro h2 { margin: .75rem 0 .45rem; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: clamp(2rem, 4vw, 3.2rem); }
+.pdf-editor-intro > p:last-child { max-width: 68ch; margin: 0; color: #705e55; line-height: 1.6; }
+.pdf-editor-layout { display: grid; grid-template-columns: 250px minmax(0, 1fr) 235px; gap: 1rem; margin-top: 1rem; }
+.pdf-editor-steps, .pdf-editor-panel, .pdf-editor-preview-note { border: 1px solid #dfd3c8; border-radius: 16px; background: #fffdfa; box-shadow: 0 9px 22px rgba(86,67,50,.1); }
+.pdf-editor-steps { padding: .65rem; display: grid; align-content: start; gap: .35rem; }
+.pdf-editor-steps button { display: grid; grid-template-columns: 28px 1fr; column-gap: .55rem; text-align: left; border: 0; border-radius: 11px; padding: .8rem; background: transparent; color: #4f3931; }
+.pdf-editor-steps button span { grid-row: 1 / 3; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; background: #e7f3f3; color: #2b6267; font-size: .73rem; font-weight: 800; }
+.pdf-editor-steps button strong { font-size: .94rem; }
+.pdf-editor-steps button small { color: #8a766d; margin-top: .18rem; }
+.pdf-editor-steps button.is-active { background: linear-gradient(135deg, #8bcaca, #62a9ab); color: #173f43; box-shadow: 0 6px 12px rgba(57,126,128,.18); }
+.pdf-editor-steps button.is-active span { background: #fffdfa; }
+.pdf-editor-panel { min-height: 360px; padding: clamp(1.25rem, 3vw, 2.25rem); }
+.editor-panel-icon { display: grid; place-items: center; width: 58px; height: 58px; border-radius: 15px; background: #dceff0; color: #2b6267; font-size: 1.55rem; }
+.pdf-editor-panel .eyebrow { margin-top: 1.2rem; color: #2b6267; }
+.pdf-editor-panel h3 { margin: .3rem 0 .7rem; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: clamp(1.7rem, 3vw, 2.35rem); }
+.pdf-editor-panel > p:not(.eyebrow) { max-width: 55ch; color: #705e55; line-height: 1.65; }
+.editor-checklist { display: grid; gap: .6rem; margin: 1.5rem 0; color: #5e4b43; font-size: .93rem; }
+.editor-checklist label { display: flex; gap: .55rem; align-items: center; }
+.editor-checklist input { accent-color: #4c9898; width: 17px; height: 17px; }
+.pdf-editor-preview-note { display: grid; align-content: start; gap: .8rem; padding: 1.2rem; color: #442a22; }
+.pdf-editor-preview-note .pdf-badge { margin: 0; }
+.pdf-editor-preview-note small { color: #705e55; line-height: 1.55; }
+.pdf-editor-preview-note .button { margin-top: .35rem; text-align: center; }
+.cover-designer { display: grid; gap: 1rem; }
+.cover-source-tabs { display: flex; flex-wrap: wrap; gap: .45rem; }
+.cover-source-tabs button { border: 1px solid #c5dddd; border-radius: 999px; background: #eff8f7; color: #396c70; padding: .5rem .75rem; font-weight: 700; }
+.cover-source-tabs button.is-active { background: #5aa4a5; border-color: #5aa4a5; color: #fff; }
+.cover-designer-grid { display: grid; grid-template-columns: minmax(190px, .95fr) minmax(220px, 1.05fr); gap: 1rem; align-items: stretch; }
+.cover-controls { display: grid; align-content: start; gap: .85rem; }
+.cover-controls p { margin: .15rem 0 .6rem; color: #705e55; line-height: 1.5; }
+.cover-controls label { display: grid; gap: .38rem; color: #5e4b43; font-size: .85rem; font-weight: 700; }
+.cover-controls input:not([type="range"]), .cover-controls select { width: 100%; min-height: 38px; border: 1px solid #bfd9d8; border-radius: 8px; background: #fff; color: #442a22; padding: .45rem .55rem; }
+.cover-controls input[type="file"] { padding: .35rem; font-size: .75rem; }
+.cover-controls input[type="color"] { padding: .15rem; }
+.cover-controls input[type="range"] { width: 100%; accent-color: #5aa4a5; }
+.cover-controls output { float: right; color: #2b6267; }
+.cover-control-row { display: grid; grid-template-columns: 1fr 74px; gap: .6rem; }
+.cover-rotate-control { margin-top: .15rem; }
+.cover-live-preview { position: relative; display: grid; place-items: center; align-content: center; min-height: 265px; overflow: hidden; padding: 1.25rem; border: 1px solid #d5c5ba; border-radius: 12px; background-color: #fdfbf7; background-position: center; background-size: cover; box-shadow: inset 0 0 0 6px rgba(255,255,255,.35); text-align: center; }
+.cover-live-preview .cover-preview-label { position: absolute; top: .65rem; left: .7rem; color: #777068; font-size: .62rem; font-weight: 800; letter-spacing: .1em; }
+.cover-live-preview b { display: grid; place-items: center; width: 58px; height: 68px; border-radius: 10px; background: linear-gradient(135deg, #5aa4a5, #39777b); color: #fff; }
+.cover-live-preview strong { margin-top: .8rem; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 1.7rem; }
+.cover-live-preview h4 { z-index: 1; margin: 1rem 0 .3rem; line-height: 1.05; overflow-wrap: anywhere; }
+.cover-live-preview small { z-index: 1; color: #5e4b43; }
+.cover-live-preview img { position: relative; z-index: 1; width: 64px; height: 64px; margin-bottom: .4rem; border-radius: 10px; object-fit: cover; }
+.cover-live-preview.mode-custom h4,
+.cover-live-preview.mode-custom img { position: absolute; touch-action: none; cursor: grab; user-select: none; }
+.cover-live-preview.mode-custom h4 { left: 50%; top: 50%; width: min(88%, 310px); transform: translate(-50%, -50%); }
+.cover-live-preview.mode-custom img { left: 50%; top: 24%; transform: translate(-50%, -50%); }
+.cover-live-preview .cover-draggable:active { cursor: grabbing; outline: 2px dashed #5aa4a5; outline-offset: 5px; }
+
+@media (max-width: 760px) {
+  .pdf-import-editor .editor-bar { align-items: flex-start !important; gap: .65rem !important; }
+  .pdf-import-editor .editor-actions { width: auto !important; }
+  .pdf-import-editor .pdf-reader-toolbar { position: static !important; margin: 0 0 .75rem !important; padding: .8rem !important; }
+  .pdf-import-editor .pdf-reader-toolbar > div:first-child { width: 100%; }
+  .pdf-import-editor .pdf-page-controls { width: 100%; justify-content: space-between; }
+  .pdf-import-editor .share-tools { width: 100%; }
+  .pdf-import-editor .share-tools .button.compact { flex: 1 1 auto; }
+  .pdf-import-editor .flipbook-stage { min-height: calc(100dvh - 260px) !important; padding: .25rem !important; }
+  .pdf-editor-workspace { padding: .75rem; }
+  .pdf-editor-intro { padding: 1.15rem; border-left-width: 6px; }
+  .pdf-editor-layout { grid-template-columns: 1fr; }
+  .pdf-editor-steps { grid-template-columns: repeat(3, 1fr); overflow-x: auto; }
+  .pdf-editor-steps button { min-width: 150px; grid-template-columns: 1fr; gap: .35rem; }
+  .pdf-editor-steps button span { grid-row: auto; }
+  .pdf-editor-panel { min-height: 0; }
+  .cover-designer-grid { grid-template-columns: 1fr; }
+}
