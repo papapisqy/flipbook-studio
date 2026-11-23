@@ -218,12 +218,378 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .admin-dashboard-page .project-card strong, .admin-dashboard-page .panel-link { color: #3b777d !important; }
 .admin-dashboard-page .book-row { border-color: #eaded3 !important; }
 .admin-dashboard-page .book-thumb { background: linear-gradient(145deg, #b9e2e3, #78bfc0) !important; color: #20494d !important; }
+.admin-dashboard-page .book-thumb img { display: block; width: 100%; height: 100%; border-radius: inherit; object-fit: cover; }
 .admin-dashboard-page .status.neutral { background: #dceef5 !important; color: #38616f !important; }
 .admin-dashboard-page .status.draft { background: #fff0bd !important; color: #795b19 !important; }
 
 @media (max-width: 900px) {
   .admin-dashboard-page .admin-nav { position: sticky; top: 0; z-index: 30; height: auto; background: #24495a !important; box-shadow: 0 3px 10px rgba(27,53,70,.18); }
   .admin-dashboard-page .workspace { padding: 1.25rem 1rem !important; }
+}
+
+/* The editor save action belongs to the page heading.  Keeping it here avoids
+   a second, space-hungry action row inside the editing surface. */
+.admin-dashboard-page .editor-page-save-wrap {
+  position: relative;
+  z-index: 8;
+  height: 0;
+}
+
+.admin-dashboard-page .editor-page-save {
+  position: absolute;
+  right: 2rem;
+  bottom: 3.9rem;
+  margin: 0 !important;
+  min-height: 48px;
+  white-space: nowrap;
+}
+
+.admin-dashboard-page .editor-page-save:disabled {
+  cursor: not-allowed;
+  opacity: .58;
+  box-shadow: none !important;
+}
+
+@media (max-width: 760px) {
+  .admin-dashboard-page .editor-page-save-wrap {
+    height: auto;
+    display: flex;
+    justify-content: flex-end;
+    margin: -1rem 0 1rem;
+  }
+
+  .admin-dashboard-page .editor-page-save {
+    position: static;
+  }
+}
+
+.admin-dashboard-page .interactive-editor .page-picker {
+  gap: .7rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-picker label {
+  display: grid;
+  gap: .4rem;
+  color: #2b6267;
+  font-weight: 800;
+  font-size: .86rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-picker select {
+  width: 100%;
+  border: 1px solid #b9dddd;
+  border-radius: 11px;
+  background: #fffdfa;
+  color: #2b4548;
+  font-weight: 700;
+  padding: .75rem .8rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-picker > small {
+  color: #786b62;
+}
+
+.admin-dashboard-page .interactive-editor .editor-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.admin-dashboard-page .interactive-editor .sidebar-section {
+  display: grid;
+  gap: .7rem;
+}
+
+.admin-dashboard-page .interactive-editor .sidebar-section h2 {
+  margin: 0;
+  color: #245e64;
+  font-size: 1rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) 42px;
+  gap: .45rem;
+  align-items: center;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper button {
+  height: 42px;
+  border: 1px solid #b9dddd;
+  border-radius: 10px;
+  background: #fffdfa;
+  color: #28666c;
+  font-size: 1.2rem;
+  font-weight: 800;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper button:disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper label {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  height: 42px;
+  border: 1px solid #b9dddd;
+  border-radius: 10px;
+  background: #fffdfa;
+  color: #4d6667;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper input {
+  width: 3.2rem;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #285f64;
+  font-weight: 800;
+  text-align: center;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper small {
+  color: #786b62;
+  font-weight: 700;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper strong {
+  display: grid;
+  place-items: center;
+  height: 42px;
+  border: 1px solid #b9dddd;
+  border-radius: 10px;
+  background: #fffdfa;
+  color: #285f64;
+  font-size: 1rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper .page-number-field {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .35rem;
+  height: 42px;
+  border: 1px solid #b9dddd;
+  border-radius: 10px;
+  background: #fffdfa;
+  transform: translateX(-.3rem);
+}
+
+.admin-dashboard-page .interactive-editor .page-number-field input {
+  width: 1.6ch;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #285f64;
+  font-weight: 800;
+  text-align: center;
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
+
+.admin-dashboard-page .interactive-editor .page-number-field input::-webkit-outer-spin-button,
+.admin-dashboard-page .interactive-editor .page-number-field input::-webkit-inner-spin-button {
+  margin: 0;
+  appearance: none;
+}
+
+.admin-dashboard-page .interactive-editor .page-number-field strong {
+  display: block;
+  height: auto;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #786b62;
+  font-size: .9rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-current {
+  margin: 0;
+  color: #705e55;
+  font-size: .88rem;
+}
+
+.admin-dashboard-page .interactive-editor .component-section {
+  padding-top: 1.1rem;
+  border-top: 1px solid #d4e6e5;
+}
+
+.admin-dashboard-page .interactive-editor label.page-stepper {
+  display: block;
+  height: auto;
+  border: 0;
+  background: transparent;
+}
+
+.admin-dashboard-page .interactive-editor label.page-stepper select {
+  width: 100%;
+  height: 44px;
+  padding: 0 .85rem;
+  border: 1px solid #b9dddd;
+  border-radius: 11px;
+  background: #fffdfa;
+  color: #285f64;
+  font-weight: 800;
+  text-align: center;
+}
+
+/* Komponen ditambahkan dari tab Komponen; panel ringkasan yang berulang tidak
+   perlu ditampilkan lagi di inspector. */
+.admin-dashboard-page .interactive-editor .inspector-summary,
+.admin-dashboard-page .interactive-editor .inspector-summary + .button,
+.admin-dashboard-page .interactive-editor .inspector-summary ~ .helper {
+  display: none !important;
+}
+
+/* Editor interaktif — menyatu dengan tema kertas dan palet Flipbook Studio. */
+.admin-dashboard-page .interactive-editor { overflow: hidden; border: 1px solid #d8e7e5; border-radius: 18px; background: #f7fcfb; color: #442a22; box-shadow: 0 14px 30px rgba(77, 103, 100, .12); }
+.admin-dashboard-page .interactive-editor .editor-bar { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid #cfe1df; background: linear-gradient(120deg, #eff9f8, #fffaf5); color: #442a22; padding: 1rem 1.35rem; }
+.admin-dashboard-page .interactive-editor .editor-bar h1 { color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 2rem; }
+.admin-dashboard-page .interactive-editor .editor-bar .eyebrow { color: #39777b; }
+.admin-dashboard-page .interactive-editor .editor-actions .button.primary:disabled { cursor: not-allowed; opacity: .48; background: #9ebdbc; box-shadow: none; filter: saturate(.45); }
+.admin-dashboard-page .interactive-editor .editor-grid { grid-template-columns: 235px minmax(0, 1fr) 245px; min-height: 760px; background: #eef7f6; }
+.admin-dashboard-page .interactive-editor .editor-left,
+.admin-dashboard-page .interactive-editor .inspector { border-color: #d5e7e5; background: #fafffe; color: #442a22; padding: 1rem; }
+.admin-dashboard-page .interactive-editor .editor-left .tabs { border-color: #d5e7e5; }
+.admin-dashboard-page .interactive-editor .editor-left .tabs button { color: #477174; }
+.admin-dashboard-page .interactive-editor .editor-left .tabs button.is-active { background: #72bab9; color: #173f43; }
+.admin-dashboard-page .interactive-editor .page-list button,
+.admin-dashboard-page .interactive-editor .component-list button { border-color: transparent; background: transparent; color: #375f62; }
+.admin-dashboard-page .interactive-editor .page-list .is-selected { border-color: #77bdbc; background: linear-gradient(135deg, #8bcbca, #65adaf); color: #173f43; box-shadow: 0 6px 14px rgba(62, 132, 132, .17); }
+.admin-dashboard-page .interactive-editor .page-list .add-row { border-color: #99c9c6; color: #2d777b; }
+.admin-dashboard-page .interactive-editor .component-list { gap: .55rem; }
+.admin-dashboard-page .interactive-editor .component-list button { display: grid; grid-template-columns: 32px 1fr; column-gap: .55rem; text-align: left; padding: .7rem; border: 1px solid #d6e7e5; border-radius: 10px; }
+.admin-dashboard-page .interactive-editor .component-list button:hover { border-color: #70b7b5; background: #eaf7f5; }
+.admin-dashboard-page .interactive-editor .component-list button span { grid-row: span 2; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 8px; background: #dceff0; color: #2b777b; font-weight: 800; }
+.admin-dashboard-page .interactive-editor .component-list button small { color: #7a6b63; font-size: .7rem; }
+.admin-dashboard-page .interactive-editor .component-list p { margin: .65rem 0; color: #71635c; font-size: .78rem; line-height: 1.45; }
+.admin-dashboard-page .interactive-editor .canvas-wrap { display: grid; align-content: start; justify-items: center; gap: 1rem; padding: 1.1rem; background: linear-gradient(135deg, #eaf5f4, #f4effb); }
+.admin-dashboard-page .interactive-editor .canvas-header { width: min(100%, 620px); color: #587173; }
+.admin-dashboard-page .interactive-editor .canvas { position: relative; width: min(100%, 560px); min-height: unset; aspect-ratio: 210 / 297; overflow: hidden; padding: clamp(4.4rem, 8vw, 5.25rem) clamp(1.45rem, 4vw, 2.7rem) clamp(1.45rem, 4vw, 2.7rem); border: 1px solid #dfd0c4; background: #fff; color: #442a22; box-shadow: 0 16px 35px rgba(74, 70, 61, .18); }
+.admin-dashboard-page .interactive-editor .canvas-page-header { position: absolute; inset: 0 0 auto; min-height: 34px; padding: .55rem 1.2rem; background: linear-gradient(90deg, #86a9a0, #a7c3b9); color: #fff; font-size: clamp(.61rem, 1.25vw, .78rem); font-weight: 800; letter-spacing: .035em; line-height: 1.25; outline: none; text-transform: uppercase; }
+.admin-dashboard-page .interactive-editor .canvas-page-header:focus { box-shadow: inset 0 -3px 0 #39777b; }
+.admin-dashboard-page .interactive-editor .canvas-page-footer { position: absolute; right: clamp(1.45rem, 4vw, 2.7rem); bottom: 1.15rem; left: clamp(1.45rem, 4vw, 2.7rem); display: flex; justify-content: space-between; gap: .75rem; padding-top: .45rem; border-top: 1px solid #d8e1de; color: #56625f; font-size: clamp(.62rem, 1.1vw, .76rem); line-height: 1.35; }
+.admin-dashboard-page .interactive-editor .canvas-page-footer span { flex: 1; outline: none; }
+.admin-dashboard-page .interactive-editor .canvas-page-footer span:focus { color: #2c777a; }
+.admin-dashboard-page .interactive-editor .canvas-page-footer b { color: #3f4f4b; font-size: .78rem; }
+.admin-dashboard-page .interactive-editor .canvas h2 { color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: clamp(2rem, 4vw, 3rem); outline: none; }
+.admin-dashboard-page .interactive-editor .canvas-intro { color: #705e55; line-height: 1.65; }
+.admin-dashboard-page .interactive-editor .canvas-block { position: absolute; z-index: 1; width: min(78%, 360px); margin: 0; padding: 1.05rem .75rem .75rem; border: 1px dashed #b5d6d2; border-radius: 10px; background: rgba(255, 253, 250, .92); outline: none; box-shadow: 0 3px 9px rgba(72, 107, 105, .08); }
+.admin-dashboard-page .interactive-editor .canvas-block:has(.canvas-drag-handle:hover),
+.admin-dashboard-page .interactive-editor .canvas-block:hover { border-color: #5aa4a5; }
+.admin-dashboard-page .interactive-editor .canvas-drag-handle { position: absolute; top: -13px; left: 50%; display: grid; place-items: center; width: 28px; height: 24px; transform: translateX(-50%); border: 1px solid #90c5c2; border-radius: 8px; background: #e5f4f3; color: #2d777b; cursor: grab; font-size: 1rem; font-weight: 400; line-height: 1; touch-action: none; }
+.admin-dashboard-page .interactive-editor .canvas-drag-handle:active { cursor: grabbing; background: #72bab9; }
+.admin-dashboard-page .interactive-editor .canvas-delete-control { position: absolute; top: -12px; right: 9px; display: grid; place-items: center; width: 25px; height: 25px; border: 1px solid #e7b7a6; border-radius: 50%; background: #fff4ee; color: #a64b35; cursor: pointer; font-size: 1.2rem; line-height: 1; transition: transform .16s ease; }
+.admin-dashboard-page .interactive-editor .canvas-block:hover .canvas-delete-control,
+.admin-dashboard-page .interactive-editor .canvas-delete-control:focus-visible { opacity: 1; }
+.admin-dashboard-page .interactive-editor .canvas-delete-control:hover { transform: scale(1.08); background: #ffe1d3; }
+.admin-dashboard-page .interactive-editor .canvas-block div[contenteditable] { outline: none; line-height: 1.6; }
+.admin-dashboard-page .interactive-editor .canvas-block.type-judul { color: #315e62; font-size: 1.45rem; font-weight: 800; }
+.admin-dashboard-page .interactive-editor .canvas-block.type-judul div[contenteditable] { line-height: 1.35; }
+
+/* Shared sidebar icon grid: every label starts at the same x-position. */
+.admin-dashboard-page .admin-nav > a,
+.admin-dashboard-page .admin-nav .sidebar-logout {
+  display: flex !important;
+  align-items: center;
+  gap: .8rem;
+}
+
+.admin-dashboard-page .admin-nav .nav-icon {
+  display: inline-grid;
+  flex: 0 0 1.2rem;
+  width: 1.2rem;
+  place-items: center;
+  font-family: "Segoe UI Symbol", "Noto Sans Symbols", sans-serif;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Older navigation styles generated an icon with ::before.  The icons are now
+   explicit elements, so suppress the generated copy to prevent duplicates. */
+.admin-dashboard-page .admin-nav > a::before {
+  content: none !important;
+  display: none !important;
+}
+
+.admin-dashboard-page .activity-book-picker {
+  display: grid;
+  grid-template-columns: minmax(210px, .7fr) minmax(0, 1.3fr);
+  gap: 1.25rem;
+  padding: 1.45rem;
+  border: 1px solid #d9e8e6;
+  border-radius: 17px;
+  background: #fffdfa;
+  box-shadow: 0 10px 24px rgba(90,75,53,.08);
+}
+
+.admin-dashboard-page .activity-book-picker h2 { margin: 0; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 2rem; }
+.admin-dashboard-page .activity-book-picker p:not(.eyebrow) { color: #705e55; line-height: 1.55; }
+.admin-dashboard-page .activity-book-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.admin-dashboard-page .activity-book-grid button { display: grid; grid-template-columns: 2.25rem minmax(0, 1fr); column-gap: .65rem; align-items: center; padding: .9rem; border: 1px solid #cfe4e2; border-radius: 13px; background: #f8fdfc; color: #2b6267; text-align: left; }
+.admin-dashboard-page .activity-book-grid button span { grid-row: 1 / span 2; display: grid; width: 2.25rem; height: 2.25rem; place-items: center; border-radius: 50%; background: #e0f1f0; font-weight: 800; }
+.admin-dashboard-page .activity-book-grid button strong { color: #3e302b; }
+.admin-dashboard-page .activity-book-grid button small { color: #77675f; margin-top: .18rem; }
+.admin-dashboard-page .activity-book-grid button.is-selected { border-color: #5aa4a5; background: linear-gradient(135deg, #8bcaca, #62a9ab); box-shadow: 0 8px 17px rgba(65,120,122,.18); }
+.admin-dashboard-page .activity-book-grid button.is-selected span { background: #fffdfa; color: #2b6267; }
+.admin-dashboard-page .activity-results { margin-top: 1.25rem !important; }
+.admin-dashboard-page .activity-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: .85rem; margin: 1.25rem 0; }
+.admin-dashboard-page .activity-stats article { display: grid; gap: .25rem; padding: 1rem; border-radius: 13px; background: #eef8f7; }
+.admin-dashboard-page .activity-stats span, .admin-dashboard-page .activity-stats small { color: #6f625c; font-size: .82rem; }
+.admin-dashboard-page .activity-stats strong { color: #2b6267; font-size: 1.65rem; }
+.admin-dashboard-page .activity-table-wrap { overflow-x: auto; border-top: 1px solid #e8ddd3; }
+.admin-dashboard-page .activity-table-wrap table { width: 100%; min-width: 580px; border-collapse: collapse; text-align: left; }
+.admin-dashboard-page .activity-table-wrap th, .admin-dashboard-page .activity-table-wrap td { padding: .9rem .75rem; border-bottom: 1px solid #eee3d9; color: #66574f; }
+.admin-dashboard-page .activity-table-wrap th { color: #2b6267; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
+.admin-dashboard-page .activity-table-wrap td strong { color: #442a22; }
+.admin-dashboard-page .score { display: inline-grid; min-width: 2.7rem; place-items: center; padding: .24rem .45rem; border-radius: 99px; font-weight: 800; }
+.admin-dashboard-page .score-pass { background: #d9f1e6; color: #287254; }
+.admin-dashboard-page .score-review { background: #fff0c6; color: #846012; }
+
+@media (max-width: 760px) {
+  .admin-dashboard-page .activity-book-picker { grid-template-columns: 1fr; padding: 1.15rem; }
+  .admin-dashboard-page .activity-book-grid { grid-template-columns: 1fr; }
+  .admin-dashboard-page .activity-stats { grid-template-columns: 1fr; }
+}
+.admin-dashboard-page .interactive-editor .canvas-block.type-tombol { border: 0; background: transparent; text-align: center; }
+.admin-dashboard-page .interactive-editor .canvas-block.type-tombol button { border: 0; border-radius: 9px; background: #4d989a; color: white; padding: .65rem 1rem; font-weight: 800; }
+.admin-dashboard-page .interactive-editor .canvas-image-placeholder { display: grid; place-items: center; min-height: 115px; border-radius: 8px; background: #dff2f1; color: #39777b; font-size: 2rem; }
+.admin-dashboard-page .interactive-editor .canvas-image-placeholder small { margin-top: .35rem; font-size: .78rem; }
+.admin-dashboard-page .interactive-editor .canvas-image-placeholder img { display: block; width: 100%; max-height: 420px; border-radius: 7px; object-fit: contain; background: #fff; }
+.admin-dashboard-page .interactive-editor .canvas-media { display: grid; gap: .55rem; min-width: 250px; }
+.admin-dashboard-page .interactive-editor .canvas-media input { width: 100%; border: 1px solid #bddbd8; border-radius: 7px; background: #fff; color: #442a22; padding: .5rem; font-size: .76rem; }
+.admin-dashboard-page .interactive-editor .canvas-media iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 7px; background: #172f33; }
+.admin-dashboard-page .interactive-editor .canvas-media audio { width: 100%; }
+.admin-dashboard-page .interactive-editor .canvas-media small { color: #6f625c; font-size: .75rem; line-height: 1.4; }
+.admin-dashboard-page .interactive-editor .canvas-block fieldset { margin: 0; border-color: #b8d8d5; background: #fffdfa; }
+.admin-dashboard-page .interactive-editor .inspector h2 { color: #442a22; }
+.admin-dashboard-page .interactive-editor .inspector > label { color: #5c4a42; }
+.admin-dashboard-page .interactive-editor .inspector input,
+.admin-dashboard-page .interactive-editor .inspector select { border-color: #c8dfdc; background: #fffdfa; color: #442a22; }
+.admin-dashboard-page .interactive-editor .inspector-summary { display: grid; gap: .2rem; margin: 1rem 0; padding: .75rem; border-radius: 10px; background: #e5f4f3; color: #2b676c; }
+.admin-dashboard-page .interactive-editor .inspector-summary span { color: #6f625c; font-size: .8rem; }
+.admin-dashboard-page .interactive-editor .import-panel { display: grid; gap: .65rem; margin: 1rem 0; padding: .8rem; border: 1px dashed #94c8c5; border-radius: 11px; background: #eff9f8; }
+.admin-dashboard-page .interactive-editor .import-panel strong { color: #315e62; }
+.admin-dashboard-page .interactive-editor .import-panel small { color: #705e55; line-height: 1.45; }
+.admin-dashboard-page .interactive-editor .import-panel label { display: grid; gap: .35rem; color: #5c4a42; font-size: .78rem; font-weight: 700; }
+.admin-dashboard-page .interactive-editor .helper { color: #71635c; }
+
+@media (max-width: 900px) {
+  .admin-dashboard-page .interactive-editor .editor-grid { grid-template-columns: 205px minmax(0, 1fr); }
+  .admin-dashboard-page .interactive-editor .inspector { grid-column: 1 / -1; }
+}
+
+@media (max-width: 680px) {
+  .admin-dashboard-page .interactive-editor .editor-grid { display: block; min-height: 0; }
+  .admin-dashboard-page .interactive-editor .editor-left { border-bottom: 1px solid #d5e7e5; }
+  .admin-dashboard-page .interactive-editor .page-list { grid-template-columns: repeat(2, 1fr); }
+  .admin-dashboard-page .interactive-editor .component-list { grid-template-columns: 1fr; }
+  .admin-dashboard-page .interactive-editor .canvas { width: 100%; }
 }
 
 /* Remove dark dashboard remnants and keep controls in the pastel journal palette. */
@@ -264,7 +630,8 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 }
 
 .admin-dashboard-page .admin-nav a::before {
-  display: inline-grid;
+  content: none !important;
+  display: none !important;
   width: 1.15rem;
   place-items: center;
   flex: 0 0 1.15rem;
@@ -453,6 +820,23 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   .admin-dashboard-page .admin-nav.is-open .sidebar-logout { background: #ffe6db !important; border-color: #edc3b4 !important; color: #8b4d3a !important; }
 }
 
+/* Settings follows the same paper controls as the rest of the workspace. */
+.admin-dashboard-page .settings-grid { width: 100% !important; max-width: none !important; gap: 1rem !important; }
+.admin-dashboard-page .settings-card { padding: clamp(1.2rem, 2.6vw, 1.75rem) !important; border-top: 4px solid #9bcece !important; border-radius: 16px !important; }
+.admin-dashboard-page .settings-card h2 { color: #442a22 !important; font-family: Caveat, "Segoe Print", cursive !important; font-size: 2rem !important; }
+.admin-dashboard-page .settings-card > p { color: #705e55 !important; line-height: 1.6 !important; }
+.admin-dashboard-page .settings-card label:not(.settings-row) { color: #5d463d !important; font-size: .9rem !important; font-weight: 750 !important; }
+.admin-dashboard-page .settings-card input:not([type=checkbox]) { border: 1px solid #c6dddc !important; border-radius: 9px !important; background: #fffefa !important; color: #442a22 !important; box-shadow: inset 0 1px 2px rgba(86,67,50,.05) !important; }
+.admin-dashboard-page .settings-card input:not([type=checkbox]):focus { border-color: #5aa4a5 !important; box-shadow: 0 0 0 3px rgba(90,164,165,.18) !important; }
+.admin-dashboard-page .settings-hint { display: block; margin-top: 1rem; color: #7a6960; font-size: .81rem; line-height: 1.55; }
+.admin-dashboard-page .settings-save-panel { display: flex; width: 100%; max-width: none; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 1rem; padding: 1rem 1.25rem; border: 1px solid #d7e8e7; border-radius: 14px; background: rgba(255,253,250,.82); }
+.admin-dashboard-page .settings-save-panel .button { margin: 0; white-space: nowrap; }
+.admin-dashboard-page .settings-save-panel .button:disabled { cursor: not-allowed; opacity: .48; box-shadow: none !important; }
+.admin-dashboard-page .settings-message { margin: 0; color: #2b6267 !important; font-size: .9rem !important; font-weight: 650; }
+.save-toast { border-color: #b9d9d8 !important; background: #fffdfa !important; color: #442a22 !important; box-shadow: 0 14px 34px rgba(86,67,50,.18) !important; }
+.save-toast > span { background: #83c7c6 !important; color: #173f43 !important; }
+.save-toast small { color: #705e55 !important; }
+
 /* Imported-PDF editor: same bright editorial system as the dashboard. */
 .pdf-import-editor {
   min-height: 100dvh !important;
@@ -515,6 +899,94 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .pdf-import-editor .render-progress span { background: linear-gradient(90deg, #5aa4a5, #e6ad86) !important; }
 
 .pdf-editor-workspace { max-width: 1200px; margin: 0 auto; padding: clamp(1rem, 3vw, 2rem); }
+.admin-dashboard-page .editor-dashboard-shell { min-height: 0 !important; background: transparent !important; color: #442a22 !important; }
+.admin-dashboard-page .editor-dashboard-shell .pdf-editor-workspace { max-width: none !important; margin: 0; padding: 0 !important; }
+.editor-workflow-page .editor-workflow-nav { display: flex !important; width: auto !important; height: 100vh !important; padding: 1.25rem 1rem !important; overflow: hidden !important; background: linear-gradient(180deg, #e6f4f4, #cfe9e8) !important; }
+.editor-workflow-page .editor-workflow-nav .admin-menu-toggle,
+.editor-workflow-page .editor-workflow-nav .sidebar-logout { display: none !important; }
+.editor-workflow-page .editor-workflow-nav .admin-nav-brand { display: block !important; width: 100% !important; height: 92px !important; margin: 0 0 1.25rem !important; background-position: center !important; }
+.editor-workflow-menu { display: grid; gap: .55rem; }
+.editor-workflow-menu button { display: grid; grid-template-columns: 40px 1fr; column-gap: .7rem; align-items: center; width: 100%; padding: .85rem .75rem; border: 0; border-radius: 14px; background: transparent; color: #442a22; text-align: left; }
+.editor-workflow-menu button span { grid-row: 1 / 3; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #e7f3f3; color: #2b6267; font-size: .82rem; font-weight: 850; }
+.editor-workflow-menu button strong { font-size: 1rem; }
+.editor-workflow-menu button small { margin-top: .15rem; color: #8a766d; font-size: .82rem; }
+.editor-workflow-menu button.is-active { background: linear-gradient(135deg, #8bcaca, #62a9ab); color: #173f43; box-shadow: 0 7px 15px rgba(57,126,128,.2); }
+.editor-workflow-menu button.is-active span { background: #fffdfa; }
+.editor-preview-menu { display: grid; grid-template-columns: 40px 1fr; column-gap: .7rem; align-items: center; width: 100%; margin-top: .7rem; padding: .85rem .75rem; border: 0; border-radius: 14px; background: transparent; color: #442a22; font: inherit; text-align: left; }
+.editor-preview-menu span { grid-row: 1 / 3; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 50%; background: #e7f3f3; color: #2b6267; font-size: .82rem; font-weight: 850; }
+.editor-preview-menu strong { font-size: 1rem; }
+.editor-preview-menu small { margin-top: .15rem; color: #8a766d; font-size: .82rem; }
+.editor-preview-menu:hover { background: #d7eeee; color: #20494d; }
+.editor-workflow-nav .editor-workflow-back { display: block !important; margin-top: auto !important; padding: .72rem .8rem !important; text-align: center; text-decoration: none !important; }
+.editor-workflow-logout { display: block; width: 100%; margin-top: .6rem; padding: .72rem .8rem; border: 1px solid #edc3b4; border-radius: 12px; background: #ffe6db; color: #8b4d3a; font: inherit; font-size: 1rem; font-weight: 750; text-align: center; }
+.editor-workflow-logout:hover { background: #ffd8c7; border-color: #dfaa97; color: #703725; }
+.workflow-menu-toggle { display: none; }
+.editor-workflow-page .pdf-editor-layout { grid-template-columns: minmax(0, 1fr) !important; }
+.editor-workflow-page .pdf-editor-preview-note { display: none !important; }
+
+@media (max-width: 900px) {
+  .editor-workflow-page .editor-workflow-nav {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    z-index: 70;
+    display: block !important;
+    width: 64px !important;
+    height: 64px !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    overflow: visible !important;
+    background: transparent !important;
+    border: 0 !important;
+    box-shadow: none !important;
+    transition: width .38s cubic-bezier(.22,.75,.25,1), height .38s cubic-bezier(.22,.75,.25,1), background .38s ease;
+  }
+  .editor-workflow-page .editor-workflow-nav .admin-menu-toggle,
+  .editor-workflow-page .editor-workflow-nav .sidebar-logout { display: none !important; }
+  .workflow-menu-toggle { position: absolute; top: .7rem; left: .7rem; z-index: 3; display: grid; gap: 4px; width: 48px; height: 48px; place-content: center; border: 1px solid rgba(255,255,255,.55); border-radius: 12px; background: #5aa4a5; box-shadow: 0 5px 13px rgba(43,89,92,.23); }
+  .workflow-menu-toggle span { display: block; width: 21px; height: 2px; border-radius: 99px; background: #f7ffff; }
+  .editor-workflow-page .editor-workflow-nav .admin-nav-brand,
+  .editor-workflow-page .editor-workflow-menu,
+  .editor-workflow-page .editor-preview-menu,
+  .editor-workflow-page .editor-workflow-nav .editor-workflow-back,
+  .editor-workflow-page .editor-workflow-logout { display: none !important; }
+  .editor-workflow-page .editor-workflow-nav.is-open { display: flex !important; flex-direction: column; width: min(330px, 86vw) !important; height: 100dvh !important; padding: 1.25rem !important; overflow-y: auto !important; background: linear-gradient(180deg, #e6f4f4, #cfe9e8) !important; border-right: 1px solid #b9d9d8 !important; box-shadow: 12px 0 28px rgba(65,120,122,.2) !important; }
+  .editor-workflow-page .editor-workflow-nav.is-open .workflow-menu-toggle { left: auto; right: 1rem; }
+  .editor-workflow-page .editor-workflow-nav.is-open .editor-workflow-menu { display: grid !important; width: 100% !important; margin-top: .35rem; gap: .7rem; }
+  .editor-workflow-page .editor-workflow-nav.is-open .editor-workflow-menu button { width: 100% !important; grid-template-columns: 42px minmax(0, 1fr); padding: 1rem; }
+  .editor-workflow-page .editor-workflow-nav.is-open .editor-preview-menu { display: grid !important; grid-template-columns: 42px minmax(0, 1fr); padding: 1rem; }
+  .admin-dashboard-page .editor-workflow-nav.is-open .admin-nav-brand { display: block !important; width: 175px !important; height: 92px !important; margin: 0 auto 1rem !important; background-position: center !important; }
+  .admin-dashboard-page .editor-workflow-nav.is-open .sidebar-logout { display: none !important; }
+  .admin-dashboard-page .editor-workflow-nav.is-open > .editor-workflow-back { display: block !important; width: 100% !important; margin-top: auto !important; padding: .78rem .9rem !important; border: 1px solid #bddbd9 !important; border-radius: 12px !important; background: #fffdfa !important; color: #2b6267 !important; font-size: 1rem !important; font-weight: 750 !important; line-height: 1.25 !important; text-align: center !important; }
+  .admin-dashboard-page .editor-workflow-nav.is-open > .editor-workflow-logout { display: block !important; width: 100% !important; margin-top: .6rem !important; }
+}
+
+@media (max-width: 760px) {
+  .editor-workflow-page .pdf-editor-layout { grid-template-columns: 1fr !important; }
+}
+
+/* Keep the workflow return action visible on the desktop editor menu. */
+@media (min-width: 901px) {
+  .admin-dashboard-page .editor-workflow-nav > .editor-workflow-back {
+    display: block !important;
+    visibility: visible !important;
+    margin-top: auto !important;
+    padding: .78rem .9rem !important;
+    border: 1px solid #bddbd9 !important;
+    border-radius: 12px !important;
+    background: #fffdfa !important;
+    color: #2b6267 !important;
+    font-size: 1rem !important;
+    font-weight: 750 !important;
+    line-height: 1.25 !important;
+    text-align: center !important;
+  }
+}
+.pdf-editor-context { margin: 0 0 1rem; color: #705e55; line-height: 1.6; }
+.admin-dashboard-page .editor-dashboard-shell .pdf-editor-layout { grid-template-columns: 280px minmax(0, 1fr) 235px; margin-top: 0; }
+.admin-dashboard-page .editor-dashboard-shell .pdf-editor-steps { min-height: 510px; display: flex; flex-direction: column; padding: .85rem; }
+.admin-dashboard-page .editor-dashboard-shell .pdf-editor-steps button { flex: 0 0 auto; }
+.admin-dashboard-page .editor-back-link { margin-top: auto !important; text-align: center; text-decoration: none !important; }
 .pdf-editor-intro { padding: 1.5rem 1.75rem; border-left: 8px solid #5aa4a5; border-radius: 18px; background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px); box-shadow: 0 10px 22px rgba(86,67,50,.1); }
 .pdf-editor-intro h2 { margin: .75rem 0 .45rem; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: clamp(2rem, 4vw, 3.2rem); }
 .pdf-editor-intro > p:last-child { max-width: 68ch; margin: 0; color: #705e55; line-height: 1.6; }
@@ -546,15 +1018,23 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .cover-designer-grid { display: grid; grid-template-columns: minmax(190px, .95fr) minmax(220px, 1.05fr); gap: 1rem; align-items: stretch; }
 .cover-controls { display: grid; align-content: start; gap: .85rem; }
 .cover-controls p { margin: .15rem 0 .6rem; color: #705e55; line-height: 1.5; }
+.cover-image-option { padding: 1rem; border: 1px dashed #91c5c3; border-radius: 13px; background: linear-gradient(135deg, #eff9f8, #fffdfa); }
+.cover-image-option strong { display: block; color: #442a22; }
+.cover-settings-option { padding: 1rem; border: 1px solid #b9d8d6; border-radius: 13px; background: linear-gradient(135deg, #edf8f7, #fffdfa); }
+.cover-settings-option strong { display: block; color: #442a22; }
+.cover-image-option .cover-image-upload { width: 100%; margin-top: .25rem; text-align: center; }
+.cover-upload-status { margin-top: .65rem; padding: .55rem .65rem; border-radius: 8px; background: #fff; color: #537475; font-size: .78rem; line-height: 1.4; overflow-wrap: anywhere; }
 .cover-controls label { display: grid; gap: .38rem; color: #5e4b43; font-size: .85rem; font-weight: 700; }
 .cover-controls input:not([type="range"]), .cover-controls select { width: 100%; min-height: 38px; border: 1px solid #bfd9d8; border-radius: 8px; background: #fff; color: #442a22; padding: .45rem .55rem; }
 .cover-controls input[type="file"] { padding: .35rem; font-size: .75rem; }
 .cover-controls input[type="color"] { padding: .15rem; }
 .cover-controls input[type="range"] { width: 100%; accent-color: #5aa4a5; }
 .cover-controls output { float: right; color: #2b6267; }
+.cover-placement { margin-top: .45rem; }
+.cover-placement small { display: block; margin-top: .35rem; color: #705e55; font-size: .75rem; font-weight: 500; line-height: 1.4; }
 .cover-control-row { display: grid; grid-template-columns: 1fr 74px; gap: .6rem; }
 .cover-rotate-control { margin-top: .15rem; }
-.cover-live-preview { position: relative; display: grid; place-items: center; align-content: center; min-height: 265px; overflow: hidden; padding: 1.25rem; border: 1px solid #d5c5ba; border-radius: 12px; background-color: #fdfbf7; background-position: center; background-size: cover; box-shadow: inset 0 0 0 6px rgba(255,255,255,.35); text-align: center; }
+.cover-live-preview { position: relative; display: grid; place-items: center; align-content: center; min-height: 265px; overflow: hidden; padding: 1.25rem; border: 1px solid #d5c5ba; border-radius: 12px; background-color: #fdfbf7; background-position: center; background-repeat: no-repeat; background-size: contain; box-shadow: inset 0 0 0 6px rgba(255,255,255,.35); text-align: center; }
 .cover-live-preview .cover-preview-label { position: absolute; top: .65rem; left: .7rem; color: #777068; font-size: .62rem; font-weight: 800; letter-spacing: .1em; }
 .cover-live-preview b { display: grid; place-items: center; width: 58px; height: 68px; border-radius: 10px; background: linear-gradient(135deg, #5aa4a5, #39777b); color: #fff; }
 .cover-live-preview strong { margin-top: .8rem; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 1.7rem; }
@@ -566,6 +1046,127 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .cover-live-preview.mode-custom h4 { left: 50%; top: 50%; width: min(88%, 310px); transform: translate(-50%, -50%); }
 .cover-live-preview.mode-custom img { left: 50%; top: 24%; transform: translate(-50%, -50%); }
 .cover-live-preview .cover-draggable:active { cursor: grabbing; outline: 2px dashed #5aa4a5; outline-offset: 5px; }
+
+/* Ruang kerja sampul mandiri: toolbar kiri + kanvas besar seperti editor desain. */
+.cover-designer:has(.cover-live-preview.mode-custom) { gap: 1.25rem; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-designer-grid { grid-template-columns: minmax(245px, 290px) minmax(0, 1fr); min-height: 560px; align-items: stretch; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-controls { align-content: start; gap: .75rem; padding: 1rem; border: 1px solid #c9e0de; border-radius: 14px; background: linear-gradient(180deg, #eff9f8, #fffdfa); box-shadow: 0 10px 22px rgba(62, 112, 112, .08); }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-custom-option { display: grid; gap: .72rem; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-custom-option::before { content: 'ALAT DESAIN'; color: #39777b; font-size: .7rem; font-weight: 850; letter-spacing: .1em; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-custom-option label { padding-bottom: .65rem; border-bottom: 1px solid #dcebea; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-custom-option label:last-child { border-bottom: 0; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-live-preview { min-height: 560px; padding: 2rem; border: 1px solid #bfd9d8; border-radius: 16px; background-color: #eaf4f3; background-image: linear-gradient(45deg, rgba(92, 151, 151, .08) 25%, transparent 25%), linear-gradient(-45deg, rgba(92, 151, 151, .08) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(92, 151, 151, .08) 75%), linear-gradient(-45deg, transparent 75%, rgba(92, 151, 151, .08) 75%); background-size: 22px 22px; background-position: 0 0, 0 11px, 11px -11px, -11px 0; box-shadow: inset 0 0 0 12px rgba(255,255,255,.45); }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-live-preview::after { content: 'Area desain sampul'; position: absolute; right: .85rem; bottom: .7rem; color: #5b8587; font-size: .72rem; font-weight: 700; }
+.cover-designer:has(.cover-live-preview.mode-custom) .cover-live-preview h4 { padding: .35rem .65rem; border: 1px dashed rgba(57,119,123,.7); background: rgba(255,253,250,.74); }
+.cover-page-picker { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 1rem; background: rgba(54,82,86,.38); backdrop-filter: blur(4px); }
+.cover-page-picker > section { position: relative; width: min(540px, 100%); max-height: min(620px, 88dvh); overflow: auto; padding: 1.35rem; border: 1px solid #d9cbc0; border-radius: 18px; background: #fffdfa; box-shadow: 0 18px 48px rgba(60,54,48,.24); color: #442a22; }
+.cover-page-picker h4 { margin: .2rem 0 .45rem; font-family: Caveat, "Segoe Print", cursive; font-size: 2rem; }
+.cover-picker-info { margin: 0 0 1rem; color: #705e55; }
+.cover-picker-close { position: absolute; top: .75rem; right: .75rem; width: 34px; height: 34px; border: 1px solid #c5dddd; border-radius: 50%; background: #eff8f7; color: #2b6267; font-size: 1.35rem; line-height: 1; }
+.cover-page-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: .65rem; }
+.cover-page-list button { min-height: 72px; border: 1px solid #c5dddd; border-radius: 11px; background: #f2f9f8; color: #2b6267; font-weight: 750; }
+.cover-page-list button:hover { border-color: #5aa4a5; background: #dff1ef; }
+
+/* About page — bring the developer profile into the same paper workspace. */
+.admin-dashboard-page .about-hero {
+  display: grid !important;
+  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr) !important;
+  gap: clamp(1.25rem, 3vw, 2.5rem) !important;
+  align-items: center !important;
+  padding: clamp(1.35rem, 3vw, 2.25rem) !important;
+  border: 1px solid #e4d7ca !important;
+  border-left: 8px solid #5aa4a5 !important;
+  border-radius: 18px !important;
+  background: repeating-linear-gradient(to bottom, #fdfbf7 0 27px, #e2d5c9 28px, #fdfbf7 29px) !important;
+  color: #442a22 !important;
+  box-shadow: 0 12px 28px rgba(90,75,53,.12) !important;
+}
+
+.admin-dashboard-page .about-developer-logo {
+  width: min(100%, 190px) !important;
+  height: 190px !important;
+  margin: 0 auto !important;
+  border: 1px solid #bddbd9 !important;
+  border-radius: 18px !important;
+  background: linear-gradient(145deg, #dff3f2, #c5e4e5) !important;
+  box-shadow: 0 8px 18px rgba(65,120,122,.14) !important;
+}
+
+.admin-dashboard-page .about-developer-logo img {
+  border-radius: 12px !important;
+  object-fit: contain !important;
+}
+
+.admin-dashboard-page .about-hero .eyebrow,
+.admin-dashboard-page .about-cards .about-card small {
+  color: #2b7876 !important;
+}
+
+.admin-dashboard-page .about-hero h2 {
+  margin: .15rem 0 .55rem !important;
+  color: #442a22 !important;
+  font-family: Caveat, "Segoe Print", cursive !important;
+  font-size: clamp(2.25rem, 4vw, 3.5rem) !important;
+}
+
+.admin-dashboard-page .about-hero > div:last-child > p:not(.eyebrow),
+.admin-dashboard-page .about-cards .about-card p {
+  max-width: 72ch !important;
+  color: #705e55 !important;
+  font-size: 1rem !important;
+  line-height: 1.65 !important;
+}
+
+.admin-dashboard-page .about-meta { gap: .5rem !important; margin-top: 1rem; }
+.admin-dashboard-page .about-meta span {
+  border: 1px solid #bddbd9 !important;
+  border-radius: 999px !important;
+  background: #e6f4f4 !important;
+  color: #356b70 !important;
+  padding: .38rem .68rem !important;
+  font-size: .78rem !important;
+  font-weight: 700 !important;
+}
+
+.admin-dashboard-page .about-cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 1rem !important;
+  margin-top: 1rem !important;
+}
+
+.admin-dashboard-page .about-cards .about-card {
+  display: block !important;
+  min-height: 205px !important;
+  padding: 1.35rem !important;
+  border-top: 4px solid #9bcece !important;
+  border-radius: 16px !important;
+  background: #fffdfa !important;
+}
+
+.admin-dashboard-page .about-cards .about-card h3 {
+  margin: 1rem 0 .55rem !important;
+  color: #442a22 !important;
+  font-family: Caveat, "Segoe Print", cursive !important;
+  font-size: 1.8rem !important;
+}
+
+.admin-dashboard-page .about-quote {
+  margin-top: 1rem !important;
+  padding: 1.6rem 1.25rem !important;
+  border: 1px solid #d7e8e7 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #e3f4f2, #fef3e9) !important;
+  color: #49312a !important;
+  box-shadow: 0 8px 20px rgba(90,75,53,.09) !important;
+  font-family: Caveat, "Segoe Print", cursive !important;
+  font-size: clamp(1.65rem, 2.4vw, 2.2rem) !important;
+}
+
+.admin-dashboard-page .about-quote small {
+  color: #6f625c !important;
+  font-family: Inter, "Segoe UI", sans-serif !important;
+  font-size: .85rem !important;
+}
 
 @media (max-width: 760px) {
   .pdf-import-editor .editor-bar { align-items: flex-start !important; gap: .65rem !important; }
@@ -584,4 +1185,40 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   .pdf-editor-steps button span { grid-row: auto; }
   .pdf-editor-panel { min-height: 0; }
   .cover-designer-grid { grid-template-columns: 1fr; }
+  .cover-designer:has(.cover-live-preview.mode-custom) .cover-designer-grid { grid-template-columns: 1fr; min-height: 0; }
+  .cover-designer:has(.cover-live-preview.mode-custom) .cover-live-preview { min-height: 440px; }
+  .admin-dashboard-page .about-hero { grid-template-columns: 1fr !important; padding: 1.25rem !important; }
+  .admin-dashboard-page .about-developer-logo { width: 150px !important; height: 150px !important; }
+  .admin-dashboard-page .about-hero h2 { text-align: center; }
+  .admin-dashboard-page .about-hero .eyebrow { text-align: center; }
+  .admin-dashboard-page .about-meta { justify-content: center; }
+  .admin-dashboard-page .about-cards { grid-template-columns: 1fr !important; }
+  .admin-dashboard-page .about-cards .about-card { min-height: 0 !important; }
+}
+
+@media (max-width: 760px) {
+  .admin-dashboard-page .editor-dashboard-shell .pdf-editor-layout { grid-template-columns: 1fr !important; }
+  .admin-dashboard-page .editor-dashboard-shell .pdf-editor-steps { min-height: 0; display: flex; overflow: visible; }
+  .admin-dashboard-page .editor-dashboard-shell .pdf-editor-steps button { min-width: 0; grid-template-columns: 28px 1fr; }
+  .admin-dashboard-page .editor-back-link { margin-top: 1rem !important; }
+}
+
+/* Touch browsers can keep :hover after changing pages.  Do not let that make
+   Koleksi Flipbook look selected when another menu is the active route. */
+@media (max-width: 900px) {
+  .admin-dashboard-page .admin-nav.is-open > a:not(.is-current):hover,
+  .admin-dashboard-page .admin-nav.is-open > a:not(.is-current):active,
+  .admin-dashboard-page .admin-nav.is-open > a:not(.is-current):focus {
+    background: transparent !important;
+    color: #2b6267 !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+
+  @media (hover: hover) {
+    .admin-dashboard-page .admin-nav.is-open > a:not(.is-current):hover {
+      background: #d7eeee !important;
+      color: #20494d !important;
+    }
+  }
 }
