@@ -16,7 +16,7 @@ create or replace function public.admin_list_draft_structure(
   p_actor_admin_id uuid,
   p_book_id uuid
 )
-returns table (node_id uuid, parent_node_id uuid, node_kind text, position integer, content jsonb, component_id uuid, component_type text, component_position integer, configuration jsonb)
+returns table (node_id uuid, parent_node_id uuid, node_kind text, "position" integer, content jsonb, component_id uuid, component_type text, component_position integer, configuration jsonb)
 language sql
 security definer
 set search_path = pg_catalog, public

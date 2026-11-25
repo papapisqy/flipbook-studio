@@ -8,7 +8,7 @@ export const mockBooks: MockBook[] = [
     { id: 'pg-makhluk-hidup', label: 'Makhluk hidup', kind: 'Halaman', body: 'Setiap makhluk hidup memiliki peran. Tumbuhan menghasilkan makanan, hewan memindahkan energi, dan manusia bertanggung jawab menggunakan sumber daya secara bijak.' },
     { id: 'pg-rantai-makanan', label: 'Rantai makanan', kind: 'Aktivitas', body: 'Manakah tindakan yang paling membantu ekosistem di sekitar sekolah?' },
   ] },
-  { id: 'book-samudra', slug: 'jelajah-samudra', title: 'Jelajah Samudra', description: 'Contoh draf untuk menampilkan state daftar dan editor.', subject: 'IPAS', grade: 'VI', draftRevision: 3, publicationStatus: 'Draf', pages: [] },
+  { id: 'book-samudra', slug: 'jelajah-samudra', title: 'Jelajah Samudra', description: 'Contoh draf untuk menampilkan tampilan daftar dan editor.', subject: 'IPAS', grade: 'VI', draftRevision: 3, publicationStatus: 'Draf', pages: [] },
 ]
 
 export const getMockBookBySlug = (slug: string) => mockBooks.find((book) => book.slug === slug)

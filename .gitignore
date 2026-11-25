@@ -10,3 +10,5 @@ dist/
 # Local tooling
 .vite/
 coverage/
+
+.vercel

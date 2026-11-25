@@ -11,11 +11,12 @@ function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
 }
 
-const LOCAL_DEV_ORIGIN = 'http://localhost:5173'
+const DEFAULT_ORIGIN = 'http://localhost:5173'
+const allowedOrigins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? DEFAULT_ORIGIN).split(',').map((value) => value.trim()).filter(Boolean))
 
-function corsHeaders() {
+function corsHeaders(origin: string) {
   return {
-    'access-control-allow-origin': LOCAL_DEV_ORIGIN,
+    'access-control-allow-origin': origin,
     'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage',
     'access-control-allow-methods': 'POST, OPTIONS',
     'vary': 'Origin',
@@ -72,15 +73,15 @@ const protectedHandler = withSupabase({ auth: 'user' }, async (request, context)
 export default {
   fetch: async (request: Request) => {
     const origin = request.headers.get('origin')
-    if (origin && origin !== LOCAL_DEV_ORIGIN) return json({ error: 'origin_not_allowed' }, 403)
+    if (origin && !allowedOrigins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
     if (request.method === 'OPTIONS') {
-      if (origin !== LOCAL_DEV_ORIGIN) return json({ error: 'origin_not_allowed' }, 403)
-      return new Response(null, { status: 204, headers: corsHeaders() })
+      if (!origin || !allowedOrigins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
+      return new Response(null, { status: 204, headers: corsHeaders(origin) })
     }
     const response = await protectedHandler(request)
-    if (origin !== LOCAL_DEV_ORIGIN) return response
+    if (!origin) return response
     const headers = new Headers(response.headers)
-    for (const [key, value] of Object.entries(corsHeaders())) headers.set(key, value)
+    for (const [key, value] of Object.entries(corsHeaders(origin))) headers.set(key, value)
     return new Response(response.body, { status: response.status, headers })
   },
 }

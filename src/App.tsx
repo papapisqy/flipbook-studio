@@ -19,7 +19,7 @@ import {
 } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { EmptyState, ErrorState, LoadingState } from "./components/AsyncState";
-import type { MockBook } from "./data/mockContent";
+import { mockBooks, type MockBook } from "./data/mockContent";
 import {
   clearReaderProgress,
   getReaderProgress,
@@ -31,10 +31,32 @@ import {
   mockBookRepository,
   RepositoryNotFoundError,
 } from "./services/bookRepository";
-import { supabase, supabaseConfigurationStatus } from "./lib/supabase";
+import { setSessionPersistence, supabase, supabaseConfigurationStatus } from "./lib/supabase";
 import HTMLFlipBook from "react-pageflip";
+import QRCode from "qrcode";
+import QrScanner from "qr-scanner";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+import {
+  AlignLeft,
+  AlignCenter,
+  AlignJustify,
+  AlignRight,
+  BookOpen,
+  ChevronLeft,
+  ChevronRight,
+  CircleHelp,
+  FileText,
+  Image as ImageIcon,
+  LayoutDashboard,
+  ListChecks,
+  Music2,
+  QrCode,
+  Settings,
+  Sparkles,
+  Type,
+  Video,
+} from "lucide-react";
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorker;
 
 type Resource<T> =
@@ -44,17 +66,61 @@ type Resource<T> =
   | { status: "error" };
 const uploadedPdfUrls = new Map<string, string>();
 const coverPdfBytes = new Map<string, ArrayBuffer>();
+const MAX_PDF_BYTES = 25 * 1024 * 1024;
+const MAX_PDF_PAGES = 200;
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+  })[character]!);
+}
+function safeLocalStorageGet(key: string, fallback = "") {
+  try { return window.localStorage.getItem(key) ?? fallback; } catch { return fallback; }
+}
+function safeLocalStorageSet(key: string, value: string) {
+  try { window.localStorage.setItem(key, value); return true; } catch { return false; }
+}
+
+function isSupportedPdf(file: File) {
+  return file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+}
+
+function validatePdfFile(file: File) {
+  if (!isSupportedPdf(file)) return "Pilih berkas PDF yang valid.";
+  if (file.size > MAX_PDF_BYTES) return "Ukuran PDF maksimal 25 MB.";
+  return null;
+}
+
+function youtubeEmbedUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const id = url.hostname.includes("youtu.be") ? url.pathname.slice(1) : url.searchParams.get("v") ?? (url.pathname.match(/\/embed\/([^/?]+)/)?.[1] ?? "");
+    return id ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(id)}` : "";
+  } catch { return ""; }
+}
+
+function LocalQrCode({ value, alt, size = 280 }: { value: string; alt: string; size?: number }) {
+  const [src, setSrc] = useState("");
+  useEffect(() => {
+    let active = true;
+    void QRCode.toDataURL(value, { width: size, margin: 1, errorCorrectionLevel: "M" })
+      .then((dataUrl) => { if (active) setSrc(dataUrl); })
+      .catch(() => { if (active) setSrc(""); });
+    return () => { active = false; };
+  }, [size, value]);
+  return src ? <img src={src} alt={alt} /> : <span role="status">Membuat QR Code…</span>;
+}
 function savePdfBlob(key: string, file: File) {
-  const request = indexedDB.open("flipbook-studio-files", 1);
-  request.onupgradeneeded = () => request.result.createObjectStore("pdfs");
+  const request = indexedDB.open("flipbook-studio-files", 2);
+  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains("pdfs")) request.result.createObjectStore("pdfs"); if (!request.result.objectStoreNames.contains("documents")) request.result.createObjectStore("documents"); };
   request.onsuccess = () => {
     const tx = request.result.transaction("pdfs", "readwrite");
     tx.objectStore("pdfs").put(file, key);
   };
 }
 function loadPdfBlob(key: string, onLoad: (url: string) => void) {
-  const request = indexedDB.open("flipbook-studio-files", 1);
-  request.onupgradeneeded = () => request.result.createObjectStore("pdfs");
+  const request = indexedDB.open("flipbook-studio-files", 2);
+  request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains("pdfs")) request.result.createObjectStore("pdfs"); if (!request.result.objectStoreNames.contains("documents")) request.result.createObjectStore("documents"); };
   request.onsuccess = () => {
     const tx = request.result.transaction("pdfs", "readonly");
     const get = tx.objectStore("pdfs").get(key);
@@ -62,6 +128,47 @@ function loadPdfBlob(key: string, onLoad: (url: string) => void) {
       if (get.result instanceof Blob) onLoad(URL.createObjectURL(get.result));
     };
   };
+}
+function deletePdfBlob(key: string) {
+  const request = indexedDB.open("flipbook-studio-files", 2);
+  request.onsuccess = () => {
+    const tx = request.result.transaction("pdfs", "readwrite");
+    tx.objectStore("pdfs").delete(key);
+  };
+}
+function saveEditorDocument(key: string, documentState: unknown) {
+  const request = indexedDB.open("flipbook-studio-files", 2);
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains("pdfs")) request.result.createObjectStore("pdfs");
+    if (!request.result.objectStoreNames.contains("documents")) request.result.createObjectStore("documents");
+  };
+  request.onsuccess = () => request.result.transaction("documents", "readwrite").objectStore("documents").put(documentState, key);
+}
+function loadEditorDocument(key: string, onLoad: (documentState: any) => void) {
+  const request = indexedDB.open("flipbook-studio-files", 2);
+  request.onupgradeneeded = () => {
+    if (!request.result.objectStoreNames.contains("pdfs")) request.result.createObjectStore("pdfs");
+    if (!request.result.objectStoreNames.contains("documents")) request.result.createObjectStore("documents");
+  };
+  request.onsuccess = () => {
+    const get = request.result.transaction("documents", "readonly").objectStore("documents").get(key);
+    get.onsuccess = () => { if (get.result && typeof get.result === "object") onLoad(get.result); };
+  };
+}
+function readEditorDocument(key: string) {
+  return new Promise<any>((resolve) => {
+    const request = indexedDB.open("flipbook-studio-files", 2);
+    request.onupgradeneeded = () => {
+      if (!request.result.objectStoreNames.contains("pdfs")) request.result.createObjectStore("pdfs");
+      if (!request.result.objectStoreNames.contains("documents")) request.result.createObjectStore("documents");
+    };
+    request.onerror = () => resolve(null);
+    request.onsuccess = () => {
+      const get = request.result.transaction("documents", "readonly").objectStore("documents").get(key);
+      get.onsuccess = () => resolve(get.result ?? null);
+      get.onerror = () => resolve(null);
+    };
+  });
 }
 
 function bookSlug(title: string) {
@@ -84,6 +191,12 @@ function saveBookRouteMetadata(title: string, fileName?: string) {
   } catch {
     /* metadata hanya pelengkap URL lokal */
   }
+}
+
+// Rute editor lama tidak lagi tersedia; metadata ini hanya menjaga draf lama tetap terbaca.
+function bookEditorHref(title: string, fileName?: string) {
+  saveBookRouteMetadata(title, fileName);
+  return "/admin/collection";
 }
 
 function getBookRouteMetadata(slug?: string) {
@@ -136,12 +249,6 @@ function saveCoverPlacement(title: string, placement: string) {
   } catch {
     /* hanya preferensi pratinjau lokal */
   }
-}
-
-function bookEditorHref(title: string, fileName?: string) {
-  const slug = bookSlug(title);
-  saveBookRouteMetadata(title, fileName);
-  return `/admin/books/${slug}/editor`;
 }
 
 export default function App() {
@@ -202,6 +309,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Navigate replace to="/admin/login" />} />
             <Route path="/admin/login" element={<LoginRoute auth={auth} />} />
+            <Route path="/read/:slug" element={<PublicReaderRoute />} />
             <Route
               path="/admin"
               element={
@@ -223,18 +331,30 @@ export default function App() {
               }
             />
             <Route
-              path="/admin/editor"
-              element={
-                <RequireSession auth={auth}>
-                  <InteractiveEditorRoute />
-                </RequireSession>
-              }
+              path="/admin/preview/:title"
+              element={<RequireSession auth={auth}><PdfPreviewRoute /></RequireSession>}
             />
             <Route
               path="/admin/activity"
               element={
                 <RequireSession auth={auth}>
                   <ActivityRoute />
+                </RequireSession>
+              }
+            />
+            <Route
+              path="/admin/activity/:moduleTitle"
+              element={
+                <RequireSession auth={auth}>
+                  <ActivityDetailRoute />
+                </RequireSession>
+              }
+            />
+            <Route
+              path="/admin/qr-code"
+              element={
+                <RequireSession auth={auth}>
+                  <QrCodeRoute />
                 </RequireSession>
               }
             />
@@ -255,26 +375,6 @@ export default function App() {
               }
             />
             <Route
-              path="/admin/books/adsfa/editor"
-              element={<Navigate replace to="/admin" />}
-            />
-            <Route
-              path="/admin/books/book-ekosistem/editor"
-              element={
-                <RequireSession auth={auth}>
-                  <LegacyBookEditorEntry />
-                </RequireSession>
-              }
-            />
-            <Route
-              path="/admin/books/:bookId/editor"
-              element={
-                <RequireSession auth={auth}>
-                  <EditorRoute />
-                </RequireSession>
-              }
-            />
-            <Route
               path="*"
               element={
                 <ErrorState title="Halaman tidak ditemukan">
@@ -290,6 +390,43 @@ export default function App() {
 }
 
 type AuthState = { loading: boolean; session: Session | null };
+
+function PublicReaderRoute() {
+  const { slug = "" } = useParams();
+  type ReaderBlock = { id?: string; type?: string; content?: string; url?: string; label?: string; title?: string; alt?: string };
+  type ReaderPage = { id: string; label?: string; body?: string };
+  type ReaderSnapshot = { pages?: ReaderPage[]; blocks?: Record<string, ReaderBlock[]>; canvasHeader?: string };
+  const [book, setBook] = useState<{ title: string; snapshot: ReaderSnapshot } | null>(null);
+  const [activity, setActivity] = useState<any>(null);
+  const [identity, setIdentity] = useState({ full_name: "", class_name: "", school_name: "" });
+  const [studentSession, setStudentSession] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [activityNotice, setActivityNotice] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [status, setStatus] = useState<"loading" | "missing" | "error">("loading");
+  useEffect(() => {
+    if (!supabase || !slug) { setStatus("missing"); return; }
+    void supabase.from("published_flipbooks").select("title, snapshot").eq("slug", slug).maybeSingle().then(({ data, error }) => {
+      if (error) setStatus("error");
+      else if (!data) setStatus("missing");
+      else { setBook(data as typeof book); void supabase.functions.invoke("get-public-activity", { body: { slug } }).then(({ data: response }) => setActivity(response?.activity ?? null)); }
+    });
+  }, [slug]);
+  const startStudent = async (event: FormEvent) => { event.preventDefault(); if (!supabase || !activity) return; setSubmitting(true); setActivityNotice(""); const { data, error } = await supabase.functions.invoke("start-activity-session", { body: { activity_version_id: activity.id, ...identity } }); setSubmitting(false); if (error || !data?.session_token) { setActivityNotice("Identitas belum dapat disimpan. Periksa kembali data Anda."); return; } setStudentSession(data); };
+  const saveDraft = async (nextAnswers: Record<string, string>) => { if (!supabase || !studentSession) return; await supabase.functions.invoke("save-activity-draft", { headers: { "x-activity-session": studentSession.session_token }, body: { attempt_id: studentSession.attempt_id, payload: nextAnswers } }); };
+  const submitAnswers = async () => { if (!supabase || !studentSession || !activity) return; if (activity.questions.some((question: any) => !answers[question.id]?.trim())) { setActivityNotice("Jawab semua soal sebelum mengirim."); return; } setSubmitting(true); const { error } = await supabase.functions.invoke("submit-activity", { headers: { "x-activity-session": studentSession.session_token }, body: { attempt_id: studentSession.attempt_id, activity_id: activity.id, answers } }); setSubmitting(false); setActivityNotice(error ? "Jawaban belum dapat dikirim. Coba lagi." : "Jawaban berhasil dikirim. Anda tidak dapat mengubah jawaban lagi."); if (!error) setStudentSession(null); };
+  const renderBlock = (block: ReaderBlock, index: number) => {
+    const key = block.id ?? `${block.type ?? "block"}-${index}`;
+    const text = block.content ?? block.label ?? block.title ?? "";
+    if ((block.type === "Gambar" || block.type === "image") && block.url) return <figure key={key}><img src={block.url} alt={(block.alt ?? text) || "Gambar e-modul"} loading="lazy" />{text && <figcaption>{text}</figcaption>}</figure>;
+    if ((block.type === "Audio" || block.type === "audio") && block.url) return <section key={key}><p>{text}</p><audio controls src={block.url}>Browser Anda tidak mendukung audio.</audio></section>;
+    if ((block.type === "Video" || block.type === "video") && block.url) return <section key={key}><p>{text}</p><a className="button secondary" href={block.url} target="_blank" rel="noreferrer">Buka video</a></section>;
+    if (block.type === "Judul" || block.type === "heading") return <h2 key={key}>{text}</h2>;
+    return text ? <p key={key}>{text}</p> : null;
+  };
+  if (book) return <main className="public-reader"><header><img src="/flipbook-studio-logo.png?v=2" alt="E-Modul Flipbook" /><strong>{book.title}</strong></header>{activity && !studentSession && !activityNotice.includes("berhasil") ? <section className="panel public-identity"><h1>Sebelum membuka e-modul</h1><p>Isi identitas untuk mengerjakan LKPD. Hasil hanya dilihat pengajar.</p><form onSubmit={startStudent}><label>Nama lengkap<input required minLength={2} value={identity.full_name} onChange={(event) => setIdentity({ ...identity, full_name: event.target.value })} /></label><label>Kelas<input required value={identity.class_name} onChange={(event) => setIdentity({ ...identity, class_name: event.target.value })} /></label><label>Nama sekolah<input required minLength={2} value={identity.school_name} onChange={(event) => setIdentity({ ...identity, school_name: event.target.value })} /></label><button className="button primary" disabled={submitting}>{submitting ? "Memulai…" : "Buka e-modul dan LKPD"}</button>{activityNotice && <p role="status">{activityNotice}</p>}</form></section> : <><article>{(book.snapshot.pages ?? []).map((page) => <section key={page.id}><h1>{page.label}</h1><p>{page.body}</p></section>)}</article>{activity && studentSession && <section className="panel public-activity"><h2>LKPD</h2>{activity.questions.map((question: any, index: number) => <fieldset key={question.id}><legend>{index + 1}. {question.prompt}</legend>{question.question_type === "multiple_choice" ? question.options.map((option: string) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => { const next = { ...answers, [question.id]: option }; setAnswers(next); void saveDraft(next); }} /> {option}</label>) : <textarea value={answers[question.id] ?? ""} onChange={(event) => { const next = { ...answers, [question.id]: event.target.value }; setAnswers(next); }} onBlur={() => void saveDraft(answers)} />}</fieldset>)}<button className="button primary" disabled={submitting} onClick={() => void submitAnswers()}>{submitting ? "Mengirim…" : "Kirim jawaban"}</button>{activityNotice && <p role="status">{activityNotice}</p>}</section>}</>}</main>;
+  return <main className="public-reader"><ErrorState title={status === "error" ? "E-modul tidak dapat dimuat" : "E-modul tidak tersedia"}>{status === "loading" ? "Memuat e-modul…" : "Tautan ini tidak lagi tersedia atau belum dipublikasikan."}</ErrorState></main>;
+}
 
 function HomeRoute({ auth }: { auth: AuthState }) {
   if (auth.loading)
@@ -388,116 +525,19 @@ function RequireSession({
   if (profile.status === "error")
     return (
       <ErrorState title="Hak akses administrator tidak dapat diperiksa">
-        Sesi login ada, tetapi profil admin tidak dapat dibaca. Coba muat ulang;
-        policy RLS tetap menjadi sumber otorisasi data.
+        Sesi masuk tersedia, tetapi profil administrator tidak dapat dibaca. Coba
+        muat ulang. Kebijakan RLS tetap menjadi dasar otorisasi data.
       </ErrorState>
     );
   if (profile.status === "missing")
     return (
       <ErrorState title="Akses administrator belum aktif">
-        Akun ini sudah login, tetapi belum memiliki profil administrator aktif.
-        Hubungi pengelola proyek untuk provisioning; jangan gunakan akun lain
-        atau membuat profil lewat browser.
+        Akun ini sudah masuk, tetapi belum memiliki profil administrator aktif.
+        Hubungi pengelola proyek untuk penyediaan profil. Jangan gunakan akun lain
+        atau membuat profil melalui peramban.
       </ErrorState>
     );
   return <>{children}</>;
-}
-
-function LegacyLoginRoute({ auth }: { auth: AuthState }) {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [bookOpened, setBookOpened] = useState(false);
-  useEffect(() => {
-    const timer = window.setTimeout(() => setBookOpened(true), 180);
-    return () => window.clearTimeout(timer);
-  }, []);
-  const destination =
-    (location.state as { from?: string } | null)?.from ?? "/admin";
-  const submit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const form = event.currentTarget;
-    if (!supabase) {
-      setError(
-        "Konfigurasi Supabase browser belum tersedia. Periksa variabel VITE_SUPABASE_*.",
-      );
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setSubmitting(false);
-    if (signInError) {
-      setError(
-        "Login tidak berhasil. Periksa email, password, dan status konfirmasi akun.",
-      );
-      return;
-    }
-    const rememberSession =
-      (form.querySelector('input[type="checkbox"]') as HTMLInputElement | null)
-        ?.checked ?? false;
-    if (!rememberSession) {
-      for (const key of Object.keys(localStorage)) {
-        if (key.startsWith("sb-") && key.endsWith("-auth-token"))
-          localStorage.removeItem(key);
-      }
-    }
-  };
-  return (
-    <section className="auth-page">
-      <form className="auth-card" onSubmit={submit}>
-        <p className="eyebrow">ADMINISTRATOR</p>
-        <h1>Masuk ke workspace</h1>
-        <p>
-          Login memverifikasi sesi Supabase Auth. Akses data buku tetap menunggu
-          provisioning profil dan policy scope admin.
-        </p>
-        <label>
-          Email
-          <input
-            type="email"
-            autoComplete="email"
-            value={email}
-            onChange={(event) => setEmail(event.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Password
-          <input
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(event) => setPassword(event.target.value)}
-            required
-          />
-        </label>
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
-        )}
-        {supabaseConfigurationStatus === "missing-configuration" && (
-          <p className="auth-error" role="alert">
-            Konfigurasi Supabase belum ditemukan.
-          </p>
-        )}
-        <button
-          className="button primary"
-          disabled={submitting || !supabase}
-          type="submit"
-        >
-          {submitting ? "Memverifikasi…" : "Masuk"}
-        </button>
-      </form>
-    </section>
-  );
 }
 
 function LoginRoute({ auth }: { auth: AuthState }) {
@@ -508,28 +548,43 @@ function LoginRoute({ auth }: { auth: AuthState }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberSession, setRememberSession] = useState(false);
+  const requestedDestination = (location.state as { from?: unknown } | null)?.from;
   const destination =
-    (location.state as { from?: string } | null)?.from ?? "/admin";
+    typeof requestedDestination === "string" &&
+    /^\/admin(?:\/|$)/.test(requestedDestination) &&
+    !requestedDestination.startsWith("//")
+      ? requestedDestination
+      : "/admin";
+  if (!auth.loading && auth.session) return <Navigate replace to={destination} />;
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!supabase) {
-      setError("Konfigurasi Supabase browser belum tersedia.");
+      setError("Konfigurasi Supabase pada peramban belum tersedia.");
       return;
     }
     setSubmitting(true);
     setError(null);
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    setSubmitting(false);
-    if (signInError) {
+    try {
+      setSessionPersistence(rememberSession);
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (signInError) {
+        setError(
+          "Masuk tidak berhasil. Periksa email, kata sandi, dan status konfirmasi akun.",
+        );
+        return;
+      }
+      navigate(destination, { replace: true });
+    } catch {
       setError(
-        "Login tidak berhasil. Periksa email, password, dan status konfirmasi akun.",
+        "Masuk tidak dapat diproses. Periksa koneksi internet lalu coba lagi.",
       );
-      return;
+    } finally {
+      setSubmitting(false);
     }
-    navigate(destination, { replace: true });
   };
   return (
     <section className="auth-page journal-login">
@@ -538,20 +593,20 @@ function LoginRoute({ auth }: { auth: AuthState }) {
         <div className="journal-page-stack" aria-hidden="true" />
         <div className="journal-clip" aria-hidden="true">
           <i />
-          <span>portal admin</span>
+          <span>portal administrator</span>
         </div>
         <div className="journal-ribbon" aria-hidden="true" />
         <div className="journal-spread">
           <aside className="journal-story">
             <div className="journal-margin" aria-hidden="true" />
             <div className="journal-brand">
-              <img src="/flipbook-studio-logo.png" alt="Flipbook Studio" />
-              <span className="journal-tape">FLIPBOOK STUDIO</span>
+              <img src="/flipbook-studio-logo.png" alt="E-Modul Flipbook" />
+              <span className="journal-tape">E-MODUL FLIPBOOK</span>
               <time>EDISI 2026</time>
             </div>
             <div className="journal-intro">
               <span className="journal-tag">✦ Studio Animasi</span>
-              <h1>Hidupkan ceritamu lembar demi lembar.</h1>
+              <h1>Hidupkan cerita Anda, lembar demi lembar.</h1>
               <p>
                 “Setiap goresan membawa kehidupan pada tiap lembaran gerak
                 flipbook.”
@@ -560,13 +615,13 @@ function LoginRoute({ auth }: { auth: AuthState }) {
             <div className="journal-note">
               <b>✎ Tips flipbook hari ini</b>
               <span>
-                Jaga konsistensi proporsi garis di setiap frame agar ilusi gerak
-                tetap mulus dan natural.
+                Jagalah konsistensi proporsi garis pada setiap bingkai agar ilusi
+                gerak tetap mulus dan alami.
               </span>
             </div>
             <ul className="journal-checklist">
               <li className="done">Sketsa keyframe karakter utama</li>
-              <li>Uji kelenturan gerak in-between</li>
+              <li>Uji keluwesan gerak antarbingkai</li>
               <li>Ekspor urutan gambar flipbook digital</li>
             </ul>
             <footer>
@@ -579,13 +634,13 @@ function LoginRoute({ auth }: { auth: AuthState }) {
             ))}
           </div>
           <div className="journal-mobile-logo">
-            <img src="/flipbook-studio-logo.png" alt="Flipbook Studio" />
+            <img src="/flipbook-studio-logo.png" alt="E-Modul Flipbook" />
           </div>
           <form className="journal-form" onSubmit={submit}>
             <div className="journal-form-heading">
               <div>
                 <h2>Masuk ke Akun</h2>
-                <p>Tuliskan kredensial jurnalmu di bawah untuk melanjutkan.</p>
+                <p>Masukkan kredensial Anda di bawah ini untuk melanjutkan.</p>
               </div>
               <span>Hal. 02</span>
             </div>
@@ -614,6 +669,7 @@ function LoginRoute({ auth }: { auth: AuthState }) {
                 <button
                   type="button"
                   onClick={() => setShowPassword((value) => !value)}
+                   aria-pressed={showPassword}
                   aria-label={
                     showPassword
                       ? "Sembunyikan kata sandi"
@@ -629,7 +685,12 @@ function LoginRoute({ auth }: { auth: AuthState }) {
               </span>
             </label>
             <label className="journal-remember">
-              <input type="checkbox" /> Simpan sesi di perangkat ini
+              <input
+                type="checkbox"
+                checked={rememberSession}
+                onChange={(event) => setRememberSession(event.target.checked)}
+              />{" "}
+              Simpan sesi di perangkat ini
             </label>
             {error && (
               <p className="auth-error" role="alert">
@@ -690,7 +751,7 @@ function ReaderRoute() {
     [slug],
   );
   if (resource.status === "loading")
-    return <LoadingState label="Memuat buku publik mock…" />;
+    return <LoadingState label="Memuat buku publik contoh…" />;
   if (resource.status === "not-found")
     return (
       <ErrorState title="Buku tidak tersedia">
@@ -701,7 +762,7 @@ function ReaderRoute() {
   if (resource.status === "error")
     return (
       <ErrorState title="Buku tidak dapat dimuat">
-        Repository mock gagal merespons.
+        Penyimpanan data contoh tidak dapat diakses.
       </ErrorState>
     );
   return <Reader book={resource.data} requestedPageId={pageId} />;
@@ -758,7 +819,7 @@ function Reader({
           <span>⌁</span>
         </div>
         <div className="cover-copy">
-          <p className="eyebrow">BUKU DIGITAL · CONTOH MOCK</p>
+          <p className="eyebrow">BUKU DIGITAL · CONTOH</p>
           <h1>{book.title}</h1>
           <p className="lede">{book.description}</p>
           <dl className="book-meta">
@@ -783,14 +844,14 @@ function Reader({
               Mulai dari awal
             </button>
           </div>
-          <p className="helper">Progres mock tersimpan hanya di browser ini.</p>
+          <p className="helper">Kemajuan baca tersimpan hanya di peramban ini.</p>
         </div>
       </section>
     );
   if (!page)
     return (
       <ErrorState title="Tujuan halaman tidak tersedia">
-        Halaman tidak ada pada snapshot mock.
+        Halaman tidak tersedia dalam data contoh.
       </ErrorState>
     );
   return (
@@ -935,12 +996,12 @@ function Activity({
           disabled={!answer || submitting || Boolean(submission)}
           onClick={submit}
         >
-          {submitting ? "Mengirim mock…" : "Kirim jawaban mock"}
+          {submitting ? "Mengirim jawaban…" : "Kirim jawaban"}
         </button>
         <p className="notice" aria-live="polite">
           {submission
-            ? `Diterima mock lokal · receipt ${submission.receiptId}. Bukan penerimaan server atau hasil penilaian.`
-            : "Status: belum diterima server."}
+            ? `Jawaban diterima secara lokal · nomor bukti ${submission.receiptId}. Ini bukan hasil penilaian.`
+            : "Status: jawaban belum dikirim."}
         </p>
       </div>
     </>
@@ -961,7 +1022,7 @@ function AdminInfoShell({
   eyebrow,
   children,
 }: {
-  active: "settings" | "about" | "editor" | "activity";
+  active: "settings" | "about" | "editor" | "activity" | "qr";
   title: string;
   eyebrow: string;
   children: ReactNode;
@@ -986,7 +1047,7 @@ function AdminInfoShell({
       <aside className="admin-nav">
         <div className="admin-nav-brand">
           <span className="brand-mark">F</span>
-          <strong>Flipbook Studio</strong>
+          <strong>E-Modul Flipbook</strong>
         </div>
         <div className="workspace-switcher">
           KOLEKSI PUBLIKASI<span>⌄</span>
@@ -994,22 +1055,22 @@ function AdminInfoShell({
         <p className="admin-nav-label">WORKSPACE</p>
         <Link to="/admin">
           <span className="nav-icon" aria-hidden="true">
-            ▦
+            <LayoutDashboard />
           </span>
           <span>Dashboard</span>
         </Link>
         <Link
-          className={active === "editor" ? "is-current" : ""}
-          to="/admin/editor"
+          className={active === "qr" ? "is-current" : ""}
+          to="/admin/qr-code"
         >
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <QrCode />
           </span>
-          <span>Editor Interaktif</span>
+          <span>QR Code</span>
         </Link>
         <Link to="/admin/collection">
           <span className="nav-icon" aria-hidden="true">
-            ☷
+            <BookOpen />
           </span>
           <span>Koleksi</span>
         </Link>
@@ -1018,7 +1079,7 @@ function AdminInfoShell({
           to="/admin/activity"
         >
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <ListChecks />
           </span>
           <span>Aktivitas</span>
         </Link>
@@ -1027,7 +1088,7 @@ function AdminInfoShell({
           to="/admin/settings"
         >
           <span className="nav-icon" aria-hidden="true">
-            ⚙
+            <Settings />
           </span>
           <span>Pengaturan</span>
         </Link>
@@ -1036,13 +1097,13 @@ function AdminInfoShell({
           to="/admin/about"
         >
           <span className="nav-icon" aria-hidden="true">
-            ⓘ
+            <CircleHelp />
           </span>
           <span>Tentang Kami</span>
         </Link>
         <div className="storage-card">
           <strong>Penyimpanan</strong>
-          <span>Telemetry provider belum tersedia</span>
+          <span>Informasi penyedia telemetri belum tersedia</span>
           <div className="storage-bar">
             <i />
           </div>
@@ -1069,18 +1130,18 @@ function AdminInfoShell({
 function SettingsRoute() {
   const [savedProfile, setSavedProfile] = useState(() => ({
     name:
-      localStorage.getItem("flipbook-studio-display-name") || "Editor Redaksi",
+      safeLocalStorageGet("flipbook-studio-display-name") || "Editor Redaksi",
     email:
-      localStorage.getItem("flipbook-studio-profile-email") ||
+      safeLocalStorageGet("flipbook-studio-profile-email") ||
       "admin@flipbook.id",
   }));
   const [displayName, setDisplayName] = useState(
     () =>
-      localStorage.getItem("flipbook-studio-display-name") || "Editor Redaksi",
+      safeLocalStorageGet("flipbook-studio-display-name") || "Editor Redaksi",
   );
   const [email, setEmail] = useState(
     () =>
-      localStorage.getItem("flipbook-studio-profile-email") ||
+      safeLocalStorageGet("flipbook-studio-profile-email") ||
       "admin@flipbook.id",
   );
   const [newPassword, setNewPassword] = useState("");
@@ -1089,10 +1150,14 @@ function SettingsRoute() {
   const [message, setMessage] = useState("");
 
   useEffect(() => {
-    document.documentElement.classList.remove("flipbook-dark-mode");
-    localStorage.removeItem("flipbook-studio-dark-mode");
-    localStorage.removeItem("flipbook-studio-auto-save");
     void supabase?.auth.getUser().then(({ data }) => {
+      const savedName = data.user?.user_metadata?.display_name;
+      if (typeof savedName === "string" && savedName.trim()) {
+        const name = savedName.trim();
+        setDisplayName(name);
+        setSavedProfile((profile) => ({ ...profile, name }));
+        safeLocalStorageSet("flipbook-studio-display-name", name);
+      }
       if (data.user?.email) {
         setEmail(data.user.email);
         setSavedProfile((profile) => ({
@@ -1116,8 +1181,16 @@ function SettingsRoute() {
       setMessage("Email login wajib diisi.");
       return;
     }
-    if (newPassword && newPassword.length < 6) {
-      setMessage("Kata sandi baru minimal terdiri dari 6 karakter.");
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setMessage("Masukkan alamat email yang valid.");
+      return;
+    }
+    if (safeName.length > 120) {
+      setMessage("Nama tampilan maksimal 120 karakter.");
+      return;
+    }
+    if (newPassword && newPassword.length < 8) {
+      setMessage("Kata sandi baru minimal terdiri dari 8 karakter.");
       return;
     }
     if (newPassword !== confirmPassword) {
@@ -1130,36 +1203,48 @@ function SettingsRoute() {
     }
     setSaving(true);
     setMessage("");
-    const updates: { email?: string; password?: string } = {};
+    const updates: { email?: string; password?: string; data?: { display_name: string } } = {
+      data: { display_name: safeName },
+    };
     if (normalizedEmail) updates.email = normalizedEmail;
     if (newPassword) updates.password = newPassword;
-    const { error } = await supabase.auth.updateUser(updates);
-    setSaving(false);
-    if (error) {
-      setMessage(error.message);
-      return;
+    try {
+      const { data, error } = await supabase.auth.updateUser(updates);
+      if (error || !data.user) {
+        setMessage("Perubahan akun belum dapat disimpan. Periksa data lalu coba lagi.");
+        return;
+      }
+      const confirmedEmail = data.user.email ?? savedProfile.email;
+      const emailNeedsConfirmation = normalizedEmail !== confirmedEmail;
+      safeLocalStorageSet("flipbook-studio-display-name", safeName);
+      safeLocalStorageSet("flipbook-studio-profile-email", confirmedEmail);
+      window.dispatchEvent(new Event("flipbook-profile-updated"));
+      setEmail(confirmedEmail);
+      setNewPassword("");
+      setConfirmPassword("");
+      setSavedProfile({ name: safeName, email: confirmedEmail });
+      setMessage(
+        emailNeedsConfirmation
+          ? "Profil disimpan. Konfirmasikan email baru melalui pesan dari Supabase sebelum digunakan untuk masuk."
+          : newPassword
+            ? "Profil diperbarui. Kata sandi baru sudah disimpan."
+            : "Profil dan email login sudah diperbarui.",
+      );
+      const toast = document.createElement("div");
+      toast.className = "save-toast";
+      toast.innerHTML =
+        "<span>✓</span><div><strong>Pengaturan tersimpan</strong><small>Preferensi akun berhasil diperbarui.</small></div>";
+      document.body.appendChild(toast);
+      requestAnimationFrame(() => toast.classList.add("is-visible"));
+      window.setTimeout(() => {
+        toast.classList.remove("is-visible");
+        window.setTimeout(() => toast.remove(), 220);
+      }, 2600);
+    } catch {
+      setMessage("Perubahan akun belum dapat diproses. Periksa koneksi internet lalu coba lagi.");
+    } finally {
+      setSaving(false);
     }
-    localStorage.setItem("flipbook-studio-display-name", safeName);
-    localStorage.setItem("flipbook-studio-profile-email", normalizedEmail);
-    window.dispatchEvent(new Event("flipbook-profile-updated"));
-    setNewPassword("");
-    setConfirmPassword("");
-    setSavedProfile({ name: safeName, email: normalizedEmail });
-    setMessage(
-      newPassword
-        ? "Profil diperbarui. Kata sandi baru sudah disimpan."
-        : "Profil dan email login sudah diperbarui.",
-    );
-    const toast = document.createElement("div");
-    toast.className = "save-toast";
-    toast.innerHTML =
-      "<span>✓</span><div><strong>Pengaturan tersimpan</strong><small>Preferensi workspace berhasil diperbarui.</small></div>";
-    document.body.appendChild(toast);
-    requestAnimationFrame(() => toast.classList.add("is-visible"));
-    window.setTimeout(() => {
-      toast.classList.remove("is-visible");
-      window.setTimeout(() => toast.remove(), 220);
-    }, 2600);
   };
 
   return (
@@ -1168,6 +1253,12 @@ function SettingsRoute() {
       eyebrow="PENGATURAN AKUN"
       title="Pengaturan"
     >
+      <form
+        onSubmit={(event) => {
+          event.preventDefault();
+          void handleSave();
+        }}
+      >
       <section className="settings-grid">
         <article className="panel settings-card settings-account-card">
           <h2>Profil redaksi</h2>
@@ -1205,7 +1296,7 @@ function SettingsRoute() {
               value={newPassword}
               onChange={(event) => setNewPassword(event.target.value)}
               autoComplete="new-password"
-              placeholder="Minimal 6 karakter"
+              placeholder="Minimal 8 karakter"
             />
           </label>
           <label>
@@ -1233,13 +1324,13 @@ function SettingsRoute() {
         </div>
         <button
           className="button primary"
-          type="button"
+          type="submit"
           disabled={saving || !hasChanges}
-          onClick={() => void handleSave()}
         >
           {saving ? "Menyimpan…" : "Simpan perubahan akun"}
         </button>
       </section>
+      </form>
     </AdminInfoShell>
   );
 }
@@ -1253,18 +1344,18 @@ function AboutRouteLegacy() {
     >
       <section className="panel about-card">
         <div className="about-logo">
-          <img src="/flipbook-studio-logo.png" alt="Flipbook Studio" />
+          <img src="/flipbook-studio-logo.png" alt="E-Modul Flipbook" />
         </div>
         <div>
-          <h2>Flipbook Studio</h2>
+          <h2>E-Modul Flipbook</h2>
           <p>
-            Workspace untuk membuat, mengelola, dan menerbitkan flipbook digital
+            Ruang kerja untuk membuat, mengelola, dan menerbitkan flipbook digital
             interaktif dengan pengalaman membaca yang nyaman.
           </p>
           <div className="about-meta">
             <span>Versi MVP</span>
             <span>Supabase dev</span>
-            <span>© 2026 Flipbook Studio</span>
+            <span>© 2026 E-Modul Flipbook</span>
           </div>
         </div>
       </section>
@@ -1281,17 +1372,16 @@ function AboutRoute() {
     >
       <section className="about-hero">
         <div className="about-developer-logo">
-          <img src="/developer-badge.png" alt="papapisqy Developer" />
+          <img src="/flipbook-studio-logo.png?v=2" alt="Logo E-Modul Flipbook" />
         </div>
         <div>
-          <p className="eyebrow">CREATOR &amp; DEVELOPER</p>
-          <h2>papapisqy</h2>
+          <p className="eyebrow">PRODUK PENGEMBANGAN TESIS</p>
+          <h2>E-Modul Flipbook</h2>
           <p>
-            Membangun Flipbook Studio sebagai ruang kerja digital yang rapi,
-            mudah digunakan, dan relevan untuk membuat publikasi interaktif.
+            E-Modul Flipbook merupakan media pembelajaran digital interaktif yang dirancang untuk membantu pendidik menyusun, mengelola, dan memublikasikan e-modul secara lebih praktis. Melalui satu ruang kerja terpadu, pengguna dapat menata materi, menambahkan media pendukung, serta menyajikan pengalaman belajar yang menarik dan mudah diakses oleh peserta didik.
           </p>
           <div className="about-meta">
-            <span>Product Development</span>
+            <span>Media Pembelajaran</span>
             <span>UI/UX</span>
             <span>Sistem Informasi</span>
           </div>
@@ -1318,19 +1408,22 @@ function AboutRoute() {
           <small>03</small>
           <h3>Tentang aplikasi</h3>
           <p>
-            Flipbook Studio membantu admin mengimpor PDF, menyusun halaman, dan
+            E-Modul Flipbook membantu admin mengimpor PDF, menyusun halaman, dan
             mengelola publikasi digital.
           </p>
         </article>
       </section>
       <section className="about-quote">
-        Berkarya melalui teknologi yang bermanfaat.<small>— papapisqy</small>
+        “Belajar menjadi lebih bermakna melalui media digital interaktif.”
+        <small>— Pengembang —</small>
       </section>
     </AdminInfoShell>
   );
 }
 
 function ActivityRoute() {
+  const navigate = useNavigate();
+  return <LkpdListRoute onCreate={(title) => navigate(`/admin/activity/${encodeURIComponent(title)}`)} />;
   const [books] = useState(() => {
     try {
       const stored = JSON.parse(
@@ -1345,6 +1438,39 @@ function ActivityRoute() {
     }
   });
   const [selectedBook, setSelectedBook] = useState(books[0]);
+  return (
+    <AdminInfoShell
+      active="activity"
+      eyebrow="PEMANTAUAN PEMBELAJARAN"
+      title="Aktivitas siswa"
+    >
+      <section className="panel activity-module-table">
+        <div>
+          <p className="eyebrow">DAFTAR E-MODUL</p>
+          <h2>Pilih e-modul</h2>
+          <p>Pilih e-modul untuk melihat data aktivitas dan nilai siswa.</p>
+        </div>
+        <div className="activity-table-wrap">
+          <table>
+            <thead>
+              <tr><th>No.</th><th>Judul e-modul</th><th>Status</th><th>Aksi</th></tr>
+            </thead>
+            <tbody>
+              {books.map((title, index) => (
+                <tr key={title}>
+                  <td>{String(index + 1).padStart(2, "0")}</td>
+                  <td><strong>{title}</strong></td>
+                  <td><span className="score score-pass">Tersedia</span></td>
+                  <td><button type="button" className="button secondary" onClick={() => navigate(`/admin/activity/${encodeURIComponent(title)}`)}>Lihat aktivitas</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </AdminInfoShell>
+  );
+
   const results = [
     {
       name: "Aulia Rahma",
@@ -1466,8 +1592,425 @@ function ActivityRoute() {
   );
 }
 
+function ActivityDetailRoute() {
+  const navigate = useNavigate();
+  const { moduleTitle } = useParams();
+  return <LkpdEditorRoute moduleTitle={decodeURIComponent(moduleTitle || "E-Modul")} onBack={() => navigate("/admin/activity")} />;
+  const selectedBook = decodeURIComponent(moduleTitle || "E-Modul");
+  const results = [
+    { name: "Aulia Rahma", className: "V-A", score: 92, completed: "12 Nov 2026 · 09.15" },
+    { name: "Bima Pratama", className: "V-A", score: 86, completed: "12 Nov 2026 · 09.09" },
+    { name: "Citra Lestari", className: "V-B", score: 78, completed: "11 Nov 2026 · 14.22" },
+    { name: "Dimas Saputra", className: "V-B", score: 95, completed: "11 Nov 2026 · 13.48" },
+  ];
+  const average = Math.round(results.reduce((total, item) => total + item.score, 0) / results.length);
+  return (
+    <AdminInfoShell active="activity" eyebrow="PEMANTAUAN PEMBELAJARAN" title="Data aktivitas">
+      <section className="panel activity-results">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">REKAP AKTIVITAS</p>
+            <h2>{selectedBook}</h2>
+            <p>Hasil pengerjaan aktivitas dan soal interaktif siswa.</p>
+          </div>
+          <button type="button" className="button secondary" onClick={() => navigate("/admin/activity")}>Kembali ke daftar</button>
+        </div>
+        <div className="activity-stats">
+          <article><span>Rata-rata nilai</span><strong>{average}</strong><small>dari 100</small></article>
+          <article><span>Tuntas</span><strong>{results.filter((item) => item.score >= 75).length}</strong><small>siswa mencapai KKM</small></article>
+          <article><span>Aktivitas selesai</span><strong>100%</strong><small>berdasarkan data tersedia</small></article>
+        </div>
+        <div className="activity-table-wrap">
+          <table>
+            <thead><tr><th>Siswa</th><th>Kelas</th><th>Nilai</th><th>Selesai dikerjakan</th></tr></thead>
+            <tbody>{results.map((item) => <tr key={item.name}><td><strong>{item.name}</strong></td><td>{item.className}</td><td><span className={`score score-${item.score >= 75 ? "pass" : "review"}`}>{item.score}</span></td><td>{item.completed}</td></tr>)}</tbody>
+          </table>
+        </div>
+      </section>
+    </AdminInfoShell>
+  );
+}
+
+type LkpdQuestionDraft = { question_type: "multiple_choice" | "essay"; prompt: string; options: string[]; correct_answer: string; max_score: number; rubric: string };
+const newLkpdQuestion = (): LkpdQuestionDraft => ({ question_type: "multiple_choice", prompt: "", options: ["", ""], correct_answer: "", max_score: 1, rubric: "" });
+
+function getCollectionModules() {
+  try {
+    const books = JSON.parse(window.localStorage.getItem("flipbook-studio-collection-books") ?? "[]") as Array<{ title?: string }>;
+    return books.map((book) => book.title).filter(Boolean) as string[];
+  } catch { return []; }
+}
+
+function LkpdListRoute({ onCreate }: { onCreate: (title: string) => void }) {
+  const [modules, setModules] = useState<string[]>(getCollectionModules);
+  const [items, setItems] = useState<Array<{ id: string; title: string; public_slug: string | null; status: string }>>([]);
+  const [status, setStatus] = useState("Memuat LKPD…");
+  useEffect(() => {
+    const refresh = () => setModules(getCollectionModules());
+    window.addEventListener("flipbook-collection-updated", refresh);
+    if (!supabase) { setStatus("Supabase belum dikonfigurasi."); return () => window.removeEventListener("flipbook-collection-updated", refresh); }
+    void supabase.from("activity_definitions").select("id,title,public_slug,status").order("updated_at", { ascending: false }).then(({ data, error }) => {
+      if (error) setStatus("LKPD belum tersedia. Terapkan migrasi LKPD terlebih dahulu.");
+      else { setItems(data ?? []); setStatus(""); }
+    });
+    return () => window.removeEventListener("flipbook-collection-updated", refresh);
+  }, []);
+  const listed = Array.from(new Set([...modules, ...items.map((item) => item.title)]));
+  return <AdminInfoShell active="activity" eyebrow="PENILAIAN LKPD" title="Aktivitas siswa">
+    <section className="panel activity-module-table">
+      <div><p className="eyebrow">LKPD PER E-MODUL</p><h2>Susun soal dan pantau jawaban</h2><p>Siswa hanya dapat mengakses LKPD yang sudah dipublikasikan bersama e-modulnya.</p></div>
+      {status && <p role="status">{status}</p>}
+      <div className="activity-table-wrap"><table><thead><tr><th>E-modul</th><th>Status LKPD</th><th>Aksi</th></tr></thead><tbody>
+        {listed.length ? listed.map((title) => { const item = items.find((candidate) => candidate.title === title); return <tr key={title}><td><strong>{title}</strong></td><td><span className={`score score-${item?.status === "published" ? "pass" : "review"}`}>{item?.status === "published" ? "Dipublikasikan" : item ? "Draf" : "Belum dibuat"}</span></td><td><button type="button" className="button secondary" onClick={() => onCreate(title)}>{item ? "Kelola LKPD" : "Buat LKPD"}</button></td></tr>; }) : <tr><td colSpan={3}>Belum ada e-modul. Buat dan publikasikan e-modul dahulu.</td></tr>}
+      </tbody></table></div>
+    </section>
+  </AdminInfoShell>;
+}
+
+function LkpdEditorRoute({ moduleTitle, onBack }: { moduleTitle: string; onBack: () => void }) {
+  const slug = bookSlug(moduleTitle);
+  const [definitionId, setDefinitionId] = useState<string | null>(null);
+  const [questions, setQuestions] = useState<LkpdQuestionDraft[]>([newLkpdQuestion()]);
+  const [attempts, setAttempts] = useState<any[]>([]);
+  const [gradingAttempt, setGradingAttempt] = useState<any>(null);
+  const [gradingAnswers, setGradingAnswers] = useState<Record<string, string>>({});
+  const [gradeValues, setGradeValues] = useState<Record<string, { score: string; comment: string }>>({});
+  const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(""); const [saving, setSaving] = useState(false);
+  useEffect(() => {
+    if (!supabase) { setLoading(false); setNotice("Supabase belum dikonfigurasi."); return; }
+    void supabase.from("activity_definitions").select("id,activity_questions(id,question_type,prompt,options,correct_answer,max_score,rubric,position)").eq("public_slug", slug).maybeSingle().then(({ data, error }) => {
+      setLoading(false); if (error) { setNotice("LKPD belum dapat dimuat. Terapkan migrasi terlebih dahulu."); return; }
+      if (data) { setDefinitionId(data.id); const loaded = [...(data.activity_questions ?? [])].sort((a, b) => a.position - b.position).map((q) => ({ ...q, options: Array.isArray(q.options) ? q.options : [] })); if (loaded.length) setQuestions(loaded); }
+    });
+  }, [slug]);
+  useEffect(() => { if (!supabase || !definitionId) return; void supabase.from("activity_attempts").select("id,student_full_name,student_class,student_school,status,finalized_at,attempt_results(final_score,review_status)").eq("activity_version_id", definitionId).order("created_at", { ascending: false }).then(({ data }) => setAttempts(data ?? [])); }, [definitionId]);
+  const updateQuestion = (index: number, patch: Partial<LkpdQuestionDraft>) => setQuestions((current) => current.map((question, itemIndex) => itemIndex === index ? { ...question, ...patch } : question));
+  const openGrading = async (attempt: any) => { if (!supabase) return; const { data } = await supabase.from("attempt_answers").select("payload").eq("attempt_id", attempt.id).maybeSingle(); setGradingAttempt(attempt); setGradingAnswers(data?.payload ?? {}); setGradeValues({}); };
+  const gradeEssay = async (question: any) => { if (!supabase || !gradingAttempt) return; const value = gradeValues[question.id]; const score = Number(value?.score); if (!Number.isFinite(score)) { setNotice("Masukkan nilai esai yang valid."); return; } const { error } = await supabase.functions.invoke("grade-activity-essay", { body: { attempt_id: gradingAttempt.id, question_id: question.id, score, comment: value?.comment ?? "" } }); if (error) { setNotice("Nilai belum dapat disimpan. Periksa batas nilai dan akses admin."); return; } setNotice("Nilai esai tersimpan."); setGradingAttempt(null); if (definitionId) { const { data } = await supabase.from("activity_attempts").select("id,student_full_name,student_class,student_school,status,finalized_at,attempt_results(final_score,review_status)").eq("activity_version_id", definitionId).order("created_at", { ascending: false }); setAttempts(data ?? []); } };
+  const save = async (publicationStatus: "draft" | "published") => {
+    if (!supabase) return; setSaving(true); setNotice("");
+    const normalized = questions.map((question) => ({ ...question, prompt: question.prompt.trim(), options: question.question_type === "multiple_choice" ? question.options.map((option) => option.trim()).filter(Boolean) : [], correct_answer: question.correct_answer.trim(), max_score: Number(question.max_score) }));
+    const { data, error } = await supabase.rpc("admin_save_lkpd", { p_definition_id: definitionId, p_title: moduleTitle, p_public_slug: slug, p_status: publicationStatus, p_questions: normalized });
+    setSaving(false); if (error) { setNotice(publicationStatus === "published" ? "Tidak dapat mempublikasikan. Pastikan e-modul ini sudah dipublikasikan dan setiap soal lengkap." : "Draf tidak dapat disimpan. Periksa isi soal."); return; }
+    setDefinitionId(data); setNotice(publicationStatus === "published" ? "LKPD dipublikasikan. Siswa akan mengisi identitas sebelum membuka modul." : "Draf LKPD tersimpan.");
+  };
+  return <AdminInfoShell active="activity" eyebrow="PENYUSUNAN LKPD" title={moduleTitle}>
+    <section className="panel activity-results"><div className="panel-heading"><div><p className="eyebrow">SOAL UNTUK SISWA</p><h2>LKPD {moduleTitle}</h2><p>Pilihan ganda dinilai otomatis; uraian masuk antrean penilaian manual.</p></div><button type="button" className="button secondary" onClick={onBack}>Kembali</button></div>
+    {loading ? <LoadingState label="Memuat LKPD…" /> : <><div className="activity-table-wrap"><ol className="lkpd-question-list">{questions.map((question, index) => <li key={index} className="panel"><div className="panel-heading"><strong>Soal {index + 1}</strong><button type="button" className="button secondary" disabled={questions.length === 1} onClick={() => setQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Hapus</button></div><label>Jenis soal<select value={question.question_type} onChange={(event) => updateQuestion(index, { question_type: event.target.value as LkpdQuestionDraft["question_type"], correct_answer: "", options: event.target.value === "essay" ? [] : ["", ""] })}><option value="multiple_choice">Pilihan ganda</option><option value="essay">Uraian</option></select></label><label>Pertanyaan<textarea value={question.prompt} onChange={(event) => updateQuestion(index, { prompt: event.target.value })} /></label><label>Bobot nilai<input type="number" min="1" max="1000" value={question.max_score} onChange={(event) => updateQuestion(index, { max_score: Number(event.target.value) })} /></label>{question.question_type === "multiple_choice" ? <><label>Pilihan jawaban{question.options.map((option, optionIndex) => <input key={optionIndex} value={option} placeholder={`Pilihan ${optionIndex + 1}`} onChange={(event) => updateQuestion(index, { options: question.options.map((value, currentIndex) => currentIndex === optionIndex ? event.target.value : value) })} />)}</label><button type="button" className="button secondary" disabled={question.options.length >= 8} onClick={() => updateQuestion(index, { options: [...question.options, ""] })}>Tambah pilihan</button><label>Jawaban benar<select value={question.correct_answer} onChange={(event) => updateQuestion(index, { correct_answer: event.target.value })}><option value="">Pilih jawaban benar</option>{question.options.filter(Boolean).map((option) => <option key={option} value={option}>{option}</option>)}</select></label></> : <label>Rubrik penilaian (opsional)<textarea value={question.rubric} onChange={(event) => updateQuestion(index, { rubric: event.target.value })} /></label>}</li>)}</ol></div><div className="panel-heading"><button type="button" className="button secondary" onClick={() => setQuestions((current) => [...current, newLkpdQuestion()])}>Tambah soal</button><div><button type="button" className="button secondary" disabled={saving} onClick={() => void save("draft")}>Simpan draf</button> <button type="button" className="button primary" disabled={saving} onClick={() => void save("published")}>{saving ? "Menyimpan…" : "Publikasikan LKPD"}</button></div></div>{notice && <p role="status">{notice}</p>}</>}</section>
+    {attempts.length > 0 && <section className="panel activity-results"><h2>Hasil siswa</h2><div className="activity-table-wrap"><table><thead><tr><th>Nama</th><th>Kelas / sekolah</th><th>Status</th><th>Nilai</th><th>Aksi</th></tr></thead><tbody>{attempts.map((attempt) => { const result = Array.isArray(attempt.attempt_results) ? attempt.attempt_results[0] : attempt.attempt_results; return <tr key={attempt.id}><td><strong>{attempt.student_full_name}</strong></td><td>{attempt.student_class} · {attempt.student_school}</td><td>{result?.review_status === "needs_review" ? "Perlu dinilai" : attempt.status === "finalized" ? "Selesai" : "Draf"}</td><td>{result?.final_score ?? "—"}</td><td>{result?.review_status === "needs_review" && <button type="button" className="button compact" onClick={() => void openGrading(attempt)}>Nilai esai</button>}</td></tr>; })}</tbody></table></div></section>}
+    {gradingAttempt && <section className="panel activity-results"><div className="panel-heading"><div><h2>Koreksi esai: {gradingAttempt.student_full_name}</h2><p>Nilai disimpan melalui server dan tidak boleh melebihi bobot soal.</p></div><button type="button" className="button secondary" onClick={() => setGradingAttempt(null)}>Tutup</button></div>{questions.filter((question: any) => question.question_type === "essay").map((question: any, index: number) => <fieldset key={question.id ?? index}><legend>{question.prompt} (maks. {question.max_score})</legend><p>{gradingAnswers[question.id] || "Siswa belum menjawab."}</p><label>Nilai<input type="number" min="0" max={question.max_score} value={gradeValues[question.id]?.score ?? ""} onChange={(event) => setGradeValues((current) => ({ ...current, [question.id]: { score: event.target.value, comment: current[question.id]?.comment ?? "" } }))} /></label><label>Komentar (opsional)<textarea value={gradeValues[question.id]?.comment ?? ""} onChange={(event) => setGradeValues((current) => ({ ...current, [question.id]: { score: current[question.id]?.score ?? "", comment: event.target.value } }))} /></label><button type="button" className="button primary" onClick={() => void gradeEssay(question)}>Simpan nilai</button></fieldset>)}</section>}
+  </AdminInfoShell>;
+}
+
+function QrCodeRoute() {
+  const [copiedId, setCopiedId] = useState("");
+  const [showMedia, setShowMedia] = useState(false);
+  const [showLink, setShowLink] = useState(false);
+  const [linkTitle, setLinkTitle] = useState("");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkSaving, setLinkSaving] = useState(false);
+  const [mediaFile, setMediaFile] = useState<File | null>(null);
+  const [uploadedMediaUrl, setUploadedMediaUrl] = useState("");
+  const [mediaName, setMediaName] = useState("");
+  const [mediaError, setMediaError] = useState("");
+  const [mediaSaving, setMediaSaving] = useState(false);
+  const [deletingMediaId, setDeletingMediaId] = useState("");
+  const [pendingDeleteMedia, setPendingDeleteMedia] = useState<{ id: string; title: string; public_url: string } | null>(null);
+  const [shownQr, setShownQr] = useState<{ id: string; title: string; target: string } | null>(null);
+  const [savedMedia, setSavedMedia] = useState<Array<{ id: string; title: string; public_url: string }>>([]);
+  const [collectionBooks, setCollectionBooks] = useState(() => {
+    try {
+      const stored = JSON.parse(window.localStorage.getItem("flipbook-studio-collection-books") ?? "[]");
+      return Array.isArray(stored) ? stored : [];
+    } catch { return []; }
+  });
+  const [publicationStatuses, setPublicationStatuses] = useState<Record<string, "Draf" | "Terpublikasi">>(() => {
+    try { return JSON.parse(window.localStorage.getItem("flipbook-studio-collection-publications") ?? "{}"); } catch { return {}; }
+  });
+  const qrRows = collectionBooks
+    .filter((book) => publicationStatuses[book.title] === "Terpublikasi")
+    .map((book) => ({ ...book, id: bookSlug(book.title), target: `${window.location.origin}/read/${bookSlug(book.title)}` }));
+  useEffect(() => {
+    const refresh = () => {
+      try {
+        const savedBooks = JSON.parse(window.localStorage.getItem("flipbook-studio-collection-books") ?? "[]");
+        const savedStatuses = JSON.parse(window.localStorage.getItem("flipbook-studio-collection-publications") ?? "{}");
+        if (Array.isArray(savedBooks)) setCollectionBooks(savedBooks);
+        if (savedStatuses && typeof savedStatuses === "object") setPublicationStatuses(savedStatuses);
+      } catch { /* mempertahankan data yang telah dimuat */ }
+    };
+    window.addEventListener("storage", refresh);
+    window.addEventListener("flipbook-collection-updated", refresh);
+    return () => { window.removeEventListener("storage", refresh); window.removeEventListener("flipbook-collection-updated", refresh); };
+  }, []);
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: media } = await supabase.from("published_media").select("id,title,public_url").eq("owner_admin_id", data.user.id).order("created_at", { ascending: false });
+      if (media) setSavedMedia(media);
+    });
+  }, []);
+  const copyQrLink = async (id: string, target: string) => {
+    try {
+      await navigator.clipboard.writeText(target);
+      setCopiedId(id);
+      window.setTimeout(() => setCopiedId(""), 1800);
+    } catch {
+      // Clipboard can be unavailable in an insecure preview.
+    }
+  };
+  const copyQrImage = async (id: string, target: string) => {
+    try {
+      const dataUrl = await QRCode.toDataURL(target, { width: 480, margin: 1, errorCorrectionLevel: "M" });
+      const blob = await (await fetch(dataUrl)).blob();
+      await navigator.clipboard.write([new ClipboardItem({ [blob.type]: blob })]);
+      setCopiedId(`${id}-qr`);
+      window.setTimeout(() => setCopiedId(""), 1800);
+    } catch {
+      setMediaError("QR Code belum dapat disalin. Coba gunakan Salin tautan.");
+    }
+  };
+  const chooseMediaFile = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (!/^(video\/(mp4|webm)|audio\/(mpeg|wav))$/.test(file.type)) {
+      setMediaError("Gunakan format MP4, WebM, MP3, atau WAV.");
+      return;
+    }
+    setMediaError("");
+    if (uploadedMediaUrl) URL.revokeObjectURL(uploadedMediaUrl);
+    setMediaFile(file);
+    setMediaName(file.name.replace(/\.[^/.]+$/, ""));
+    setUploadedMediaUrl(URL.createObjectURL(file));
+  };
+  const saveMedia = async () => {
+    if (!supabase || !mediaFile) return;
+    setMediaSaving(true); setMediaError("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("not_authenticated");
+      const id = crypto.randomUUID();
+      const extension = mediaFile.name.split(".").pop()?.toLowerCase() || "bin";
+      const path = `${authData.user.id}/${id}.${extension}`;
+      const { error: uploadError } = await supabase.storage.from("public-media").upload(path, mediaFile, { contentType: mediaFile.type, upsert: false });
+      if (uploadError) throw uploadError;
+      const { data: urlData } = supabase.storage.from("public-media").getPublicUrl(path);
+      const mediaType = mediaFile.type.startsWith("video/") ? "video" : "audio";
+      const { error: insertError } = await supabase.from("published_media").insert({ id, owner_admin_id: authData.user.id, title: mediaName || mediaFile.name, media_type: mediaType, public_url: urlData.publicUrl });
+      if (insertError) { await supabase.storage.from("public-media").remove([path]); throw insertError; }
+      setSavedMedia((current) => [{ id, title: mediaName || mediaFile.name, public_url: urlData.publicUrl }, ...current]);
+      setShowMedia(false); setMediaFile(null); setMediaName("");
+      if (uploadedMediaUrl) URL.revokeObjectURL(uploadedMediaUrl); setUploadedMediaUrl("");
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "unknown_error";
+      setMediaError(`Media belum dapat disimpan: ${detail}`);
+    } finally { setMediaSaving(false); }
+  };
+  const saveLink = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supabase) return;
+    let target: URL;
+    try { target = new URL(linkUrl.trim()); } catch { setMediaError("Masukkan tautan yang valid."); return; }
+    if (target.protocol !== "https:" && target.protocol !== "http:") { setMediaError("Gunakan tautan HTTP atau HTTPS."); return; }
+    const title = linkTitle.trim() || target.hostname;
+    setLinkSaving(true); setMediaError("");
+    try {
+      const { data: authData } = await supabase.auth.getUser();
+      if (!authData.user) throw new Error("not_authenticated");
+      const id = crypto.randomUUID();
+      const { error } = await supabase.from("published_media").insert({ id, owner_admin_id: authData.user.id, title, media_type: "video", public_url: target.toString() });
+      if (error) throw error;
+      setSavedMedia((current) => [{ id, title, public_url: target.toString() }, ...current]);
+      setShowLink(false); setLinkTitle(""); setLinkUrl("");
+    } catch (error) { setMediaError(`Tautan belum dapat disimpan: ${error instanceof Error ? error.message : "unknown_error"}`); }
+    finally { setLinkSaving(false); }
+  };
+  const deleteMedia = async (media: { id: string; public_url: string }) => {
+    if (!supabase) return;
+    setDeletingMediaId(media.id); setMediaError("");
+    try {
+      const marker = "/public-media/";
+      const index = media.public_url.indexOf(marker);
+      const path = index >= 0 ? decodeURIComponent(media.public_url.slice(index + marker.length)) : "";
+      const { data: deletedRows, error: databaseError } = await supabase.from("published_media").delete().eq("id", media.id).select("id");
+      if (databaseError || !deletedRows?.some((row) => row.id === media.id)) throw databaseError ?? new Error("delete_not_authorized");
+      if (path) { const { error: storageError } = await supabase.storage.from("public-media").remove([path]); if (storageError) throw storageError; }
+      setSavedMedia((current) => current.filter((item) => item.id !== media.id));
+      setPendingDeleteMedia(null);
+    } catch { setMediaError("Media belum dapat dihapus. Coba lagi."); }
+    finally { setDeletingMediaId(""); }
+  };
+
+  return (
+    <AdminInfoShell active="qr" eyebrow="PUBLIKASI E-MODUL" title="QR Code">
+      <section className="panel qr-table-panel">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">KOLEKSI TERPUBLIKASI</p>
+            <h2>Bagikan e-modul</h2>
+            <p>Salin QR Code atau tautan untuk membagikan e-modul.</p>
+          </div><div className="qr-heading-actions"><span className="qr-badge">{qrRows.length + savedMedia.length} QR Code</span><button className="button secondary" type="button" onClick={() => { setMediaError(""); setShowLink(true); }}>+ Tambah tautan</button><button className="button primary" type="button" onClick={() => { setMediaError(""); setShowMedia(true); }}>+ Tambah media</button></div>
+        </div>
+        {qrRows.length === 0 ? <EmptyState title="Belum ada e-modul terpublikasi">Publikasikan e-modul dari halaman Koleksi agar QR Code tersedia di sini.</EmptyState> : <div className="activity-table-wrap qr-table-wrap">
+          <table>
+            <thead><tr><th>E-modul</th><th>Tautan</th><th>Aksi</th></tr></thead>
+            <tbody>
+              {qrRows.map((item) => (
+                <tr key={item.id}>
+                  <td><strong>{item.title}</strong><small>Terpublikasi</small></td>
+                  <td className="qr-target">{item.target}</td>
+                  <td><button type="button" className="button secondary qr-copy-button" onClick={() => setShownQr({ id: item.id, title: item.title, target: item.target })}>Tampilkan QR</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>}
+      </section>
+      {savedMedia.length > 0 && <section className="panel qr-table-panel"><div className="panel-heading"><div><p className="eyebrow">MEDIA TERSIMPAN</p><h2>QR media pembelajaran</h2></div></div><div className="activity-table-wrap qr-table-wrap"><table><thead><tr><th>Media</th><th>Aksi</th></tr></thead><tbody>{savedMedia.map((media) => <tr key={media.id}><td><strong>{media.title}</strong></td><td><button type="button" className="button secondary qr-copy-button" onClick={() => setShownQr({ id: media.id, title: media.title, target: media.public_url })}>Tampilkan QR</button> <button type="button" className="button danger-button qr-copy-button" disabled={deletingMediaId === media.id} onClick={() => setPendingDeleteMedia(media)}>{deletingMediaId === media.id ? "Menghapus..." : "Hapus"}</button></td></tr>)}</tbody></table></div></section>}
+      {showMedia && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowMedia(false); }}><section className="confirm-modal media-modal" role="dialog" aria-modal="true" aria-labelledby="media-title"><p className="eyebrow">MEDIA INTERAKTIF</p><h2 id="media-title">Tambah video atau audio</h2><p>Unggah media untuk membuat QR Code.</p><label className="qr-upload-control"><span>Pilih media</span><input type="file" accept="video/mp4,video/webm,audio/mpeg,audio/wav" onChange={chooseMediaFile}/><strong>{mediaFile?.name ?? "MP4, WebM, MP3, atau WAV"}</strong></label>{mediaError && <p className="settings-message" role="alert">{mediaError}</p>}{uploadedMediaUrl && <div className="qr-media-preview"><strong>{mediaName}</strong>{mediaFile?.type.startsWith("video/") ? <video controls playsInline preload="metadata" src={uploadedMediaUrl} /> : <audio controls preload="metadata" src={uploadedMediaUrl} />}</div>}<div className="confirm-actions"><button className="button quiet" type="button" onClick={() => setShowMedia(false)}>Batal</button><button className="button primary" type="button" disabled={!mediaFile || mediaSaving} onClick={() => void saveMedia()}>{mediaSaving ? "Menyimpan…" : "Simpan & buat QR"}</button></div></section></div>}
+      {shownQr && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShownQr(null); }}><section className="confirm-modal share-modal qr-display-modal" role="dialog" aria-modal="true" aria-labelledby="shown-qr-title"><p className="eyebrow">QR CODE</p><h2 id="shown-qr-title">{shownQr.title}</h2><div className="share-modal-qr"><LocalQrCode value={shownQr.target} alt={`QR Code untuk ${shownQr.title}`} size={320} /></div><label className="share-link-field"><span>Tautan</span><input readOnly value={shownQr.target} /></label><div className="confirm-actions"><button className="button quiet" type="button" onClick={() => void copyQrImage(shownQr.id, shownQr.target)}>{copiedId === `${shownQr.id}-qr` ? "QR tersalin" : "Salin QR"}</button><button className="button primary" type="button" onClick={() => void copyQrLink(shownQr.id, shownQr.target)}>{copiedId === shownQr.id ? "Tautan tersalin" : "Salin tautan"}</button><button className="button quiet" type="button" onClick={() => setShownQr(null)}>Tutup</button></div></section></div>}
+      {pendingDeleteMedia && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingDeleteMedia(null); }}><section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="delete-media-title"><div className="confirm-icon">!</div><p className="eyebrow">KONFIRMASI TINDAKAN</p><h2 id="delete-media-title">Hapus media ini?</h2><p>Media <strong>{pendingDeleteMedia.title}</strong> dan QR Code-nya akan dihapus. Tindakan ini tidak dapat dibatalkan.</p><div className="confirm-actions"><button className="button quiet" type="button" disabled={Boolean(deletingMediaId)} onClick={() => setPendingDeleteMedia(null)}>Batal</button><button className="button danger-solid" type="button" disabled={Boolean(deletingMediaId)} onClick={() => void deleteMedia(pendingDeleteMedia)}>{deletingMediaId ? "Menghapus…" : "Ya, hapus media"}</button></div></section></div>}
+      {showLink && <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShowLink(false); }}><form className="confirm-modal media-modal" onSubmit={saveLink} aria-labelledby="link-title"><p className="eyebrow">TAUTAN EKSTERNAL</p><h2 id="link-title">Buat QR dari tautan</h2><p>Gunakan tautan video, audio, YouTube, atau sumber pembelajaran lain.</p><label className="upload-field">Judul tautan<input value={linkTitle} onChange={(event) => setLinkTitle(event.target.value)} placeholder="Contoh: Video ekosistem" /></label><label className="upload-field">Tautan<input required type="url" value={linkUrl} onChange={(event) => setLinkUrl(event.target.value)} placeholder="https://www.youtube.com/..." /></label>{mediaError && <p className="settings-message" role="alert">{mediaError}</p>}<div className="confirm-actions"><button className="button quiet" type="button" onClick={() => setShowLink(false)}>Batal</button><button className="button primary" type="submit" disabled={linkSaving}>{linkSaving ? "Menyimpan…" : "Simpan & buat QR"}</button></div></form></div>}
+    </AdminInfoShell>
+  );
+
+  const [media, setMedia] = useState<File | null>(null);
+  const [mediaUrl, setMediaUrl] = useState("");
+  const [publicUrl, setPublicUrl] = useState("");
+  const [label, setLabel] = useState("Media pembelajaran");
+  const [copied, setCopied] = useState(false);
+  const qrTarget = publicUrl.trim();
+  const qrImage = qrTarget
+    ? `https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(qrTarget)}`
+    : "";
+
+  useEffect(() => {
+    return () => {
+      if (mediaUrl.startsWith("blob:")) URL.revokeObjectURL(mediaUrl);
+    };
+  }, [mediaUrl]);
+
+  const chooseMedia = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    if (mediaUrl.startsWith("blob:")) URL.revokeObjectURL(mediaUrl);
+    setMedia(file);
+    setMediaUrl(URL.createObjectURL(file));
+    if (!label || label === "Media pembelajaran") {
+      setLabel(file.name.replace(/\.[^/.]+$/, ""));
+    }
+  };
+
+  const copyLink = async () => {
+    if (!qrTarget) return;
+    try {
+      await navigator.clipboard.writeText(qrTarget);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      /* Clipboard can be unavailable in an insecure preview. */
+    }
+  };
+
+  return (
+    <AdminInfoShell active="qr" eyebrow="MEDIA INTERAKTIF" title="QR Code">
+      <section className="qr-intro">
+        <div>
+          <p className="eyebrow">TAUTKAN MEDIA KE MODUL</p>
+          <h2>QR Code media</h2>
+          <p>
+            Unggah video atau suara untuk dipratinjau, lalu masukkan tautan
+            publik media agar QR dapat dipindai oleh siswa dari modul cetak.
+          </p>
+        </div>
+        <span className="qr-badge">⌘ Siap dicetak</span>
+      </section>
+
+      <section className="qr-workspace">
+        <form className="qr-form" onSubmit={(event) => event.preventDefault()}>
+          <label>
+            Nama media
+            <input
+              value={label}
+              onChange={(event) => setLabel(event.target.value)}
+              placeholder="Contoh: Video rantai makanan"
+            />
+          </label>
+          <label className="qr-upload-control">
+            <span>Video atau suara</span>
+            <input
+              type="file"
+              accept="video/*,audio/*"
+              onChange={chooseMedia}
+            />
+            <strong>
+              {media ? media.name : "Pilih berkas video atau suara"}
+            </strong>
+            <small>
+              MP4, WebM, MP3, WAV, atau format media lain yang didukung
+              perangkat.
+            </small>
+          </label>
+          <label>
+            Tautan publik media
+            <input
+              type="url"
+              value={publicUrl}
+              onChange={(event) => setPublicUrl(event.target.value)}
+              placeholder="https://contoh.com/video-pembelajaran"
+            />
+            <small>
+              QR hanya dapat dibuka siswa jika tautan ini dapat diakses publik.
+            </small>
+          </label>
+          {mediaUrl && (
+            <div className="qr-media-preview">
+              <strong>Pratinjau lokal</strong>
+              {media?.type.startsWith("video/") ? (
+                <video controls src={mediaUrl} />
+              ) : (
+                <audio controls src={mediaUrl} />
+              )}
+            </div>
+          )}
+        </form>
+        <aside className="qr-preview" aria-live="polite">
+          <p className="eyebrow">QR UNTUK MODUL</p>
+          {qrImage ? (
+            <>
+              <img src={qrImage} alt={`QR Code untuk ${label || "media"}`} />
+              <strong>{label || "Media pembelajaran"}</strong>
+              <small>{qrTarget}</small>
+              <button
+                type="button"
+                className="button secondary"
+                onClick={copyLink}
+              >
+                {copied ? "Tautan tersalin" : "Salin tautan"}
+              </button>
+            </>
+          ) : (
+            <div className="qr-empty">
+              <span>⌘</span>
+              <strong>Masukkan tautan publik</strong>
+              <p>
+                QR Code akan muncul di sini dan siap diunduh atau ditempel pada
+                modul.
+              </p>
+            </div>
+          )}
+        </aside>
+      </section>
+    </AdminInfoShell>
+  );
+}
+
 function DashboardRoute() {
-  return <LegacyDashboardRoute />;
+  if (!supabase) {
+    return <ErrorState title="Dashboard belum terhubung">Konfigurasi penyimpanan belum tersedia. Hubungkan Supabase untuk menampilkan data e-modul.</ErrorState>;
+  }
+  return <RealDashboardRoute />;
 }
 
 function FoundationBookProbe() {
@@ -2050,10 +2593,9 @@ function DashboardFrame({
         localStorage.getItem("flipbook-studio-display-name") ||
         "Editor Redaksi";
       const email =
-        localStorage.getItem("flipbook-studio-email") || "admin@flipbook.id";
+        localStorage.getItem("flipbook-studio-profile-email") || "admin@flipbook.id";
       const heading = document.querySelector(".dashboard-hero h1");
-      if (heading)
-        heading.innerHTML = `Selamat berkarya, ${name} <span>👋</span>`;
+      if (heading) heading.textContent = `Selamat berkarya, ${name} 👋`;
       const profileName = document.querySelector(".dashboard-profile strong");
       const profileEmail = document.querySelector(".dashboard-profile small");
       if (profileName) profileName.textContent = name;
@@ -2071,7 +2613,7 @@ function DashboardFrame({
       const card = target.closest(".project-card");
       if (card?.textContent?.includes("Mulai Impor PDF")) {
         event.preventDefault();
-        navigate("/admin/editor");
+        navigate("/admin/collection?upload=1");
       }
     };
     document.addEventListener("click", handler);
@@ -2111,43 +2653,43 @@ function DashboardFrame({
         </div>
         <Link className="is-current" to="/admin">
           <span className="nav-icon" aria-hidden="true">
-            ▦
+            <LayoutDashboard />
           </span>
           <span>Dashboard</span>
         </Link>
-        <Link to="/admin/editor">
+        <Link to="/admin/qr-code">
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <QrCode />
           </span>
-          <span>Editor Interaktif</span>
+          <span>QR Code</span>
         </Link>
         <Link to="/admin/collection">
           <span className="nav-icon" aria-hidden="true">
-            ☷
+            <BookOpen />
           </span>
           <span>Koleksi</span>
         </Link>
         <Link to="/admin/activity">
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <ListChecks />
           </span>
           <span>Aktivitas</span>
         </Link>
         <Link to="/admin/settings">
           <span className="nav-icon" aria-hidden="true">
-            ⚙
+            <Settings />
           </span>
           <span>Pengaturan</span>
         </Link>
         <Link to="/admin/about">
           <span className="nav-icon" aria-hidden="true">
-            ⓘ
+            <CircleHelp />
           </span>
           <span>Tentang Kami</span>
         </Link>
         <div className="storage-card">
           <strong>Penyimpanan Cloud</strong>
-          <span>Telemetry provider belum tersedia</span>
+            <span>Informasi penyedia telemetri belum tersedia</span>
           <div className="storage-bar">
             <i />
           </div>
@@ -2214,7 +2756,7 @@ function DashboardFrame({
             detail="Provider belum tersedia"
           />
         </div>
-        <section className="project-section">
+        {false && <section className="project-section">
           <div className="section-title">
             <h2>🚀 Mulai Proyek Baru</h2>
             <span>Pilih alur kerja sesuai tipe materi publikasi Anda</span>
@@ -2256,7 +2798,7 @@ function DashboardFrame({
               <strong>Buka Kanvas Interaktif →</strong>
             </Link>
           </div>
-        </section>
+        </section>}
         <div className="publication-layout">
           <section className="panel publications-panel" id="books">
             <div className="panel-heading">
@@ -2264,6 +2806,7 @@ function DashboardFrame({
                 <h2>Publikasi Flipbook Terbaru</h2>
                 <p>Daftar publikasi aktif dan draf editorial</p>
               </div>
+              <Link className="panel-link" to="/admin/collection">Lihat koleksi →</Link>
               <div className="publication-tabs">
                 <span className="active">Semua ({books.length})</span>
                 <span>Live ({active})</span>
@@ -2347,7 +2890,7 @@ function LegacyDashboardRoute() {
       <aside className="admin-nav">
         <div className="admin-nav-brand">
           <span className="brand-mark">F</span>
-          <strong>Flipbook Studio</strong>
+          <strong>E-Modul Flipbook</strong>
         </div>
         <div className="workspace-switcher">
           KOLEKSI PUBLIKASI<span>⌄</span>
@@ -2477,8 +3020,11 @@ function RealDashboardRoute() {
   const [books, setBooks] = useState<FoundationBook[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+  const [loading, setLoading] = useState(true);
   const refresh = () => {
     if (!supabase) return;
+    setLoading(true);
+    setError(null);
     void supabase
       .from("books")
       .select("id, title, draft_status, current_revision, updated_at")
@@ -2487,6 +3033,7 @@ function RealDashboardRoute() {
         if (queryError)
           setError("Daftar buku tidak dapat dimuat melalui policy aktif.");
         else setBooks((data ?? []) as FoundationBook[]);
+        setLoading(false);
       });
   };
   useEffect(() => {
@@ -2512,14 +3059,15 @@ function RealDashboardRoute() {
     else refresh();
     setCreating(false);
   };
+  if (loading) return <LoadingState label="Memuat koleksi flipbook…" />;
   if (error)
-    return <ErrorState title="Dashboard tidak tersedia">{error}</ErrorState>;
+    return <ErrorState title="Dashboard tidak tersedia">{error}<button className="button primary" onClick={refresh}>Coba lagi</button></ErrorState>;
   return (
     <DashboardFrame
       books={books.map((book) => ({
         id: book.id,
         title: book.title,
-        status: book.draft_status === "draft" ? "Draf" : "Terbit",
+        status: book.draft_status === "draft" ? "Draf" : "Arsip",
         meta: `Revisi ${book.current_revision} · diperbarui ${new Date(book.updated_at).toLocaleString("id-ID")}`,
         href: `/admin/books/${book.id}/editor`,
       }))}
@@ -2532,7 +3080,7 @@ function RealDashboardRoute() {
       <aside className="admin-nav">
         <div className="admin-nav-brand">
           <span className="brand-mark">F</span>
-          <strong>Flipbook Studio</strong>
+          <strong>E-Modul Flipbook</strong>
         </div>
         <div className="workspace-switcher">
           KOLEKSI PUBLIKASI<span>⌄</span>
@@ -2677,6 +3225,7 @@ function Stat({
 }
 
 function CollectionRoute() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const initialBooks = [
     {
@@ -2722,27 +3271,125 @@ function CollectionRoute() {
     return [];
   });
   const [pendingDelete, setPendingDelete] = useState<string | null>(null);
+  const [pendingPublish, setPendingPublish] = useState<(typeof books)[number] | null>(null);
+  const [shareBook, setShareBook] = useState<(typeof books)[number] | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [publishing, setPublishing] = useState(false);
+  const [collectionError, setCollectionError] = useState("");
   const [showCreateChoice, setShowCreateChoice] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(
     searchParams.get("upload") === "1",
   );
   const [uploadTitle, setUploadTitle] = useState("");
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+  const publicationKey = (title: string) => `flipbook-studio-publication-status-${bookSlug(title)}`;
+  const [publicationStatuses, setPublicationStatuses] = useState<Record<string, "Draf" | "Terpublikasi">>(() => {
+    try {
+      return JSON.parse(window.localStorage.getItem("flipbook-studio-collection-publications") ?? "{}");
+    } catch {
+      return {};
+    }
+  });
   useEffect(() => {
     try {
       window.localStorage.setItem(
         "flipbook-studio-collection-books",
         JSON.stringify(books),
       );
+      window.dispatchEvent(new Event("flipbook-collection-updated"));
     } catch {
       /* optional local persistence */
     }
   }, [books]);
-  const removeBook = () => {
-    if (pendingDelete)
-      setBooks((current) =>
-        current.filter((book) => book.title !== pendingDelete),
-      );
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("flipbook-studio-collection-publications", JSON.stringify(publicationStatuses));
+      window.dispatchEvent(new Event("flipbook-collection-updated"));
+    } catch {
+      /* optional local persistence */
+    }
+  }, [publicationStatuses]);
+  const getPublicationStatus = (book: (typeof books)[number]) =>
+    publicationStatuses[book.title] ?? (book.status === "Terbit" ? "Terpublikasi" : "Draf");
+  const setPublicationStatus = (book: (typeof books)[number], status: "Draf" | "Terpublikasi") => {
+    setPublicationStatuses((current) => ({ ...current, [book.title]: status }));
+    try {
+      window.localStorage.setItem(publicationKey(book.title), status);
+    } catch {
+      /* status tetap berlaku pada sesi ini */
+    }
+  };
+  const createPublicationSnapshot = async (collectionBook: (typeof books)[number]) => {
+    let pages = [{ id: `cover-${bookSlug(collectionBook.title)}`, label: collectionBook.title, kind: "Sampul", body: "" }];
+    let blocks: Record<string, unknown> = {};
+    let canvasHeader = "E-MODUL INTERAKTIF";
+    try {
+      const storageKey = `flipbook-studio-interactive-pages-module-${bookSlug(collectionBook.title)}`;
+      const savedDocument = window.localStorage.getItem(`${storageKey}-document`);
+      const documentState = savedDocument ? JSON.parse(savedDocument) : null;
+      if (documentState?.pages && Array.isArray(documentState.pages)) {
+        pages = documentState.pages;
+        blocks = documentState.blocks && typeof documentState.blocks === "object" ? documentState.blocks : {};
+        canvasHeader = typeof documentState.canvasHeader === "string" ? documentState.canvasHeader : canvasHeader;
+      } else {
+        const saved = window.localStorage.getItem(storageKey);
+        if (saved) pages = JSON.parse(saved);
+      }
+      const indexedDocument = await readEditorDocument(storageKey);
+      if (indexedDocument?.pages && Array.isArray(indexedDocument.pages)) {
+        pages = indexedDocument.pages;
+        blocks = indexedDocument.blocks && typeof indexedDocument.blocks === "object" ? indexedDocument.blocks : blocks;
+        canvasHeader = typeof indexedDocument.canvasHeader === "string" ? indexedDocument.canvasHeader : canvasHeader;
+      }
+    } catch {
+      /* gunakan halaman dasar bila data editor belum tersedia */
+    }
+    return {
+      book: { title: collectionBook.title }, pages, blocks,
+      canvasHeader, title: pages[0]?.label ?? collectionBook.title, selectedIndex: 0,
+    };
+  };
+  const previewBook = (collectionBook: (typeof books)[number]) => {
+    navigate(`/admin/preview/${encodeURIComponent(collectionBook.title)}`);
+  };
+  const publicFlipbookLink = (book: (typeof books)[number]) =>
+    `${window.location.origin}/read/${bookSlug(book.title)}`;
+  const publishBook = async (book: (typeof books)[number]) => {
+    if (!supabase) return;
+    setPublishing(true); setCollectionError("");
+    const snapshot = await createPublicationSnapshot(book);
+    const { error } = await supabase.functions.invoke("publish-flipbook", { body: { slug: bookSlug(book.title), title: book.title, snapshot } });
+    setPublishing(false);
+    if (error) { setCollectionError("Publikasi gagal. Periksa koneksi dan pastikan draf dapat dipublikasikan."); return; }
+    setPublicationStatus(book, "Terpublikasi");
+    setPendingPublish(null);
+    setShareBook(book);
+  };
+  const unpublishBook = async (book: (typeof books)[number]) => {
+    if (!supabase) return;
+    setPublishing(true); setCollectionError("");
+    const { error } = await supabase.functions.invoke("unpublish-flipbook", { body: { slug: bookSlug(book.title) } });
+    setPublishing(false);
+    if (error) { setCollectionError("Pembatalan publikasi gagal. Konten publik tetap aktif."); return; }
+    setPublicationStatus(book, "Draf");
+  };
+  const copyShareLink = async (book: (typeof books)[number]) => {
+    await navigator.clipboard?.writeText(publicFlipbookLink(book));
+    setShareCopied(true);
+    window.setTimeout(() => setShareCopied(false), 1600);
+  };
+  const copyQrImage = async (book: (typeof books)[number]) => {
+    await copyShareLink(book);
+  };
+  const removeBook = async () => {
+    if (pendingDelete) {
+      const book = books.find((item) => item.title === pendingDelete);
+      if (book && getPublicationStatus(book) === "Terpublikasi") await unpublishBook(book);
+      deletePdfBlob(pendingDelete);
+      uploadedPdfUrls.delete(pendingDelete);
+      try { window.localStorage.removeItem(`flipbook-studio-pdf-${pendingDelete}`); } catch { /* penyimpanan lokal tidak tersedia */ }
+      setBooks((current) => current.filter((item) => item.title !== pendingDelete));
+    }
     setPendingDelete(null);
   };
   const createFromPdf = (event: FormEvent) => {
@@ -2782,7 +3429,7 @@ function CollectionRoute() {
       <aside className="admin-nav">
         <div className="admin-nav-brand">
           <span className="brand-mark">F</span>
-          <strong>Flipbook Studio</strong>
+          <strong>E-Modul Flipbook</strong>
         </div>
         <div className="workspace-switcher">
           KOLEKSI PUBLIKASI<span>⌄</span>
@@ -2790,37 +3437,37 @@ function CollectionRoute() {
         <p className="admin-nav-label">WORKSPACE</p>
         <Link to="/admin">
           <span className="nav-icon" aria-hidden="true">
-            ▦
+            <LayoutDashboard />
           </span>
           <span>Dashboard</span>
         </Link>
-        <Link to="/admin/editor">
+        <Link to="/admin/qr-code">
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <QrCode />
           </span>
-          <span>Editor Interaktif</span>
+          <span>QR Code</span>
         </Link>
         <Link className="is-current" to="/admin/collection">
           <span className="nav-icon" aria-hidden="true">
-            ☷
+            <BookOpen />
           </span>
           <span>Koleksi</span>
         </Link>
         <Link to="/admin/activity">
           <span className="nav-icon" aria-hidden="true">
-            ✦
+            <ListChecks />
           </span>
           <span>Aktivitas</span>
         </Link>
         <Link to="/admin/settings">
           <span className="nav-icon" aria-hidden="true">
-            ⚙
+            <Settings />
           </span>
           <span>Pengaturan</span>
         </Link>
         <Link to="/admin/about">
           <span className="nav-icon" aria-hidden="true">
-            ⓘ
+            <CircleHelp />
           </span>
           <span>Tentang Kami</span>
         </Link>
@@ -2849,22 +3496,19 @@ function CollectionRoute() {
         <nav className="breadcrumbs">
           <Link to="/admin">Dashboard</Link>
           <span>/</span>
-          <span>Koleksi Flipbook</span>
+          <span>Koleksi E-Modul Flipbook</span>
         </nav>
         <div className="workspace-heading">
           <div>
             <p className="eyebrow">KOLEKSI PUBLIKASI</p>
-            <h1>Koleksi Flipbook</h1>
+            <h1>Koleksi E-Modul Flipbook</h1>
             <p>
               Kelola semua buku, draf, dan publikasi yang tersedia di workspace
               Anda.
             </p>
           </div>
-          <button
-            className="button primary"
-            onClick={() => setShowCreateChoice(true)}
-          >
-            + Buat Flipbook Baru
+          <button className="button primary" type="button" onClick={() => setShowUploadModal(true)}>
+            + Unggah PDF
           </button>
         </div>
         <section className="panel collection-panel">
@@ -2892,29 +3536,63 @@ function CollectionRoute() {
                     "FS"
                   )}
                 </div>
-                <div>
+                <div className="book-details">
                   <strong>{book.title}</strong>
                   <span>{book.meta}</span>
                 </div>
-                <span
-                  className={`status ${book.status === "Draf" ? "draft" : "neutral"}`}
-                >
-                  {book.status}
-                </span>
-                <Link className="button compact" to="/admin/editor">
-                  Buka editor
-                </Link>
-                <button
-                  className="button compact danger-button"
-                  onClick={() => setPendingDelete(book.title)}
-                >
-                  Hapus
-                </button>
+                <div className="book-actions">
+                  <span className={`status ${getPublicationStatus(book) === "Draf" ? "draft" : "neutral"}`}>
+                    {getPublicationStatus(book)}
+                  </span>
+                  <div className="book-primary-actions">
+                    <button className={`button compact ${getPublicationStatus(book) === "Terpublikasi" ? "unpublish-button" : "primary"}`} type="button" disabled={publishing} onClick={() => getPublicationStatus(book) === "Terpublikasi" ? void unpublishBook(book) : setPendingPublish(book)}>
+                      {getPublicationStatus(book) === "Terpublikasi" ? "Batalkan publikasi" : "Publikasikan"}
+                    </button>
+                    <button className="button compact" type="button" onClick={() => previewBook(book)}>
+                      Pratinjau
+                    </button>
+                    <button className="button compact" type="button" onClick={() => setShareBook(book)}>
+                      Bagikan
+                    </button>
+                  </div>
+                  <button className="button compact danger-button" type="button" aria-label={`Hapus ${book.title}`} onClick={() => setPendingDelete(book.title)}>
+                    Hapus
+                  </button>
+                </div>
               </div>
             ))
           )}
         </section>
+        {collectionError && <p className="settings-message" role="alert">{collectionError}</p>}
       </section>
+      {pendingPublish && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingPublish(null); }}>
+          <section className="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="publish-title">
+            <p className="eyebrow">KONFIRMASI PUBLIKASI</p>
+            <h2 id="publish-title">Publikasikan e-modul?</h2>
+            <p>E-modul <strong>{pendingPublish.title}</strong> akan siap dibagikan melalui tautan dan QR Code.</p>
+            <div className="confirm-actions">
+              <button className="button quiet" type="button" onClick={() => setPendingPublish(null)}>Batal</button>
+              <button className="button primary" type="button" disabled={publishing} onClick={() => void publishBook(pendingPublish)}>{publishing ? "Menerbitkan…" : "Ya, publikasikan"}</button>
+            </div>
+          </section>
+        </div>
+      )}
+      {shareBook && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setShareBook(null); }}>
+          <section className="confirm-modal share-modal" role="dialog" aria-modal="true" aria-labelledby="share-title">
+            <p className="eyebrow">BAGIKAN E-MODUL</p>
+            <h2 id="share-title">{shareBook.title}</h2>
+            <div className="share-modal-qr"><LocalQrCode value={publicFlipbookLink(shareBook)} alt={`QR Code ${shareBook.title}`} /></div>
+            <label className="share-link-field"><span>Tautan flipbook</span><input readOnly value={publicFlipbookLink(shareBook)} /></label>
+            <div className="confirm-actions">
+              <button className="button quiet" type="button" onClick={() => void copyQrImage(shareBook)}>{shareCopied ? "Tautan tersalin" : "Salin tautan"}</button>
+              <button className="button primary" type="button" onClick={() => void copyShareLink(shareBook)}>{shareCopied ? "Tersalin" : "Salin tautan"}</button>
+              <button className="button quiet" type="button" onClick={() => setShareBook(null)}>Tutup</button>
+            </div>
+          </section>
+        </div>
+      )}
       {pendingDelete && (
         <div
           className="modal-backdrop"
@@ -2931,10 +3609,10 @@ function CollectionRoute() {
           >
             <div className="confirm-icon">!</div>
             <p className="eyebrow">KONFIRMASI TINDAKAN</p>
-            <h2 id="delete-title">Hapus buku ini?</h2>
+            <h2 id="delete-title">Hapus e-modul ini?</h2>
             <p>
-              Buku <strong>{pendingDelete}</strong> akan dihapus dari koleksi
-              lokal ini. Tindakan ini tidak dapat dibatalkan.
+              E-modul <strong>{pendingDelete}</strong> akan dihapus dari koleksi
+              dan penyimpanan lokal. Tindakan ini tidak dapat dibatalkan.
             </p>
             <div className="confirm-actions">
               <button
@@ -2943,8 +3621,8 @@ function CollectionRoute() {
               >
                 Batal
               </button>
-              <button className="button danger-solid" onClick={removeBook}>
-                Ya, hapus buku
+              <button className="button danger-solid" onClick={() => void removeBook()}>
+                Ya, hapus e-modul
               </button>
             </div>
           </section>
@@ -2966,18 +3644,9 @@ function CollectionRoute() {
             aria-labelledby="create-title"
           >
             <p className="eyebrow">PROYEK BARU</p>
-            <h2 id="create-title">Bagaimana Anda ingin memulai?</h2>
-            <p>Pilih alur kerja untuk membuat flipbook baru.</p>
+            <h2 id="create-title">Unggah flipbook baru</h2>
+            <p>Pilih dokumen PDF untuk membuat flipbook baru.</p>
             <div className="choice-grid">
-              <Link
-                className="choice-card"
-                to="/admin/editor"
-                onClick={() => setShowCreateChoice(false)}
-              >
-                <span>✦</span>
-                <strong>Editor Interaktif</strong>
-                <small>Susun halaman dan komponen dari awal.</small>
-              </Link>
               <button
                 className="choice-card"
                 onClick={() => {
@@ -3118,10 +3787,17 @@ function EditorRoute() {
 }
 
 function InteractiveEditorRoute() {
+  const [searchParams] = useSearchParams();
+  const editingTitle = searchParams.get("module") ?? "";
+  const [moduleTitle, setModuleTitle] = useState(editingTitle);
+  const [saveError, setSaveError] = useState("");
+  const moduleId = editingTitle
+    ? `module-${bookSlug(editingTitle)}`
+    : "new-interactive-book";
   const blankBook: MockBook = {
-    id: "new-interactive-book",
+    id: moduleId,
     slug: "flipbook-baru",
-    title: "Flipbook Baru",
+    title: editingTitle || "Modul Baru",
     description: "Susun flipbook interaktif dari awal.",
     subject: "Umum",
     grade: "-",
@@ -3130,9 +3806,9 @@ function InteractiveEditorRoute() {
     pages: [
       {
         id: "new-page-1",
-        label: "Sampul",
-        kind: "Sampul",
-        body: "Mulai susun halaman flipbook Anda.",
+        label: "Halaman 1",
+        kind: "Halaman",
+        body: "",
       },
     ],
   };
@@ -3144,7 +3820,33 @@ function InteractiveEditorRoute() {
     return () => window.removeEventListener("interactive-editor-changes", sync);
   }, []);
   const saveEditor = () => {
-    window.dispatchEvent(new Event("interactive-editor-save"));
+    const title = moduleTitle.trim();
+    if (!title) {
+      setSaveError("Masukkan judul modul sebelum menyimpan.");
+      return;
+    }
+    setSaveError("");
+    const savedModuleId = `module-${bookSlug(title)}`;
+    window.dispatchEvent(
+      new CustomEvent("interactive-editor-save", {
+        detail: { storageKey: `flipbook-studio-interactive-pages-${savedModuleId}` },
+      }),
+    );
+    try {
+      const collectionKey = "flipbook-studio-collection-books";
+      const saved = window.localStorage.getItem(collectionKey);
+      const current = saved ? JSON.parse(saved) : [];
+      const next = Array.isArray(current) ? current.filter((item) => item.title !== title) : [];
+      next.unshift({
+        title,
+        meta: "Draf · modul interaktif",
+        status: "Draf",
+        href: `/admin/editor?module=${encodeURIComponent(title)}`,
+      });
+      window.localStorage.setItem(collectionKey, JSON.stringify(next));
+    } catch {
+      /* koleksi tetap dapat digunakan selama penyimpanan lokal tersedia */
+    }
     document.querySelector(".save-toast")?.remove();
     const toast = document.createElement("div");
     toast.className = "save-toast";
@@ -3163,15 +3865,29 @@ function InteractiveEditorRoute() {
       eyebrow="EDITOR INTERAKTIF"
       title="Editor Interaktif"
     >
-      <div className="editor-page-save-wrap">
+      <section className="editor-module-settings" aria-label="Pengaturan modul">
+        <label>
+          Judul modul
+          <input
+            value={moduleTitle}
+            onChange={(event) => {
+              setModuleTitle(event.target.value);
+              setSaveError("");
+              setHasChanges(true);
+            }}
+            placeholder="Contoh: Ekosistem untuk Kelas V"
+            required
+          />
+        </label>
         <button
           className="button primary editor-page-save"
-          disabled={!hasChanges}
+          disabled={!hasChanges && Boolean(editingTitle)}
           onClick={saveEditor}
         >
-          Simpan perubahan
+          Simpan
         </button>
-      </div>
+      </section>
+      {saveError && <p className="editor-save-error" role="alert">{saveError}</p>}
       <Editor book={blankBook} />
     </AdminInfoShell>
   );
@@ -3180,7 +3896,7 @@ function InteractiveEditorRoute() {
 function LegacyBookEditorEntry() {
   const [searchParams] = useSearchParams();
   if (!searchParams.get("title") && !searchParams.get("file"))
-    return <Navigate replace to="/admin/editor" />;
+    return <Navigate replace to="/admin/collection" />;
   return <EditorRoute />;
 }
 
@@ -3332,7 +4048,8 @@ function UploadedEditor({
     const designer = document.createElement("section");
     designer.className = "cover-designer";
     const savedCover = coverImage || getSavedCover(title);
-    designer.innerHTML = `<div class="cover-source-tabs" role="tablist"><button class="${coverMode === "pdf" ? "is-active" : ""}" data-mode="pdf">▤ Dari PDF</button><button class="${coverMode === "image" ? "is-active" : ""}" data-mode="image">▧ Unggah gambar</button><button class="${coverMode === "custom" ? "is-active" : ""}" data-mode="custom">✦ Buat sendiri</button><button class="${coverMode === "settings" ? "is-active" : ""}" data-mode="settings">⚙ Pengaturan sampul</button></div><div class="cover-designer-grid"><div class="cover-controls"><div class="cover-pdf-option" ${coverMode === "pdf" ? "" : "hidden"}><strong>Gunakan halaman pertama PDF</strong><p>Sampul diambil dari halaman pertama dokumen yang Anda impor.</p><button class="button quiet" type="button">Pilih halaman PDF</button></div><div class="cover-image-option" ${coverMode === "image" ? "" : "hidden"}><strong>Unggah gambar untuk sampul</strong><p>Gunakan JPG, PNG, atau WebP. Gambar akan langsung dipakai sebagai sampul.</p><input class="cover-background" type="file" accept="image/jpeg,image/png,image/webp" hidden /><button class="button quiet cover-image-upload" type="button">▧ Pilih gambar sampul</button><div class="cover-upload-status" aria-live="polite">${savedCover ? "Gambar sampul telah tersimpan" : "Belum ada gambar dipilih"}</div></div><div class="cover-custom-option" ${coverMode === "custom" ? "" : "hidden"}><label>Gambar latar sampul<input class="cover-background" type="file" accept="image/*" /></label><label>Gambar tambahan<input class="cover-illustration" type="file" accept="image/*" /></label><label>Judul sampul<input class="cover-title" value="${title.replace(/"/g, "&quot;")}" /></label><div class="cover-control-row"><label>Jenis font<select class="cover-font"><option value="Caveat">Caveat</option><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Trebuchet MS">Trebuchet</option></select></label><label>Warna font<input class="cover-color" type="color" value="#442a22" /></label></div><label>Ukuran teks <output class="cover-size-output">42px</output><input class="cover-size" type="range" min="24" max="72" value="42" /></label></div><div class="cover-settings-option" ${coverMode === "settings" ? "" : "hidden"}><strong>Pengaturan posisi sampul</strong><p>Tentukan apakah sampul baru menambah halaman atau menggantikan halaman pertama PDF.</p></div></div><div class="cover-live-preview mode-${coverMode}"><span class="cover-preview-label">PRATINJAU SAMPUL</span><b>PDF</b><strong>${title}</strong></div></div><button class="button primary cover-continue" type="button">Simpan sampul & lanjutkan →</button>`;
+    const safeTitle = escapeHtml(title);
+    designer.innerHTML = `<div class="cover-source-tabs" role="tablist"><button class="${coverMode === "pdf" ? "is-active" : ""}" data-mode="pdf">▤ Dari PDF</button><button class="${coverMode === "image" ? "is-active" : ""}" data-mode="image">▧ Unggah gambar</button><button class="${coverMode === "custom" ? "is-active" : ""}" data-mode="custom">✦ Buat sendiri</button><button class="${coverMode === "settings" ? "is-active" : ""}" data-mode="settings">⚙ Pengaturan sampul</button></div><div class="cover-designer-grid"><div class="cover-controls"><div class="cover-pdf-option" ${coverMode === "pdf" ? "" : "hidden"}><strong>Gunakan halaman pertama PDF</strong><p>Sampul diambil dari halaman pertama dokumen yang Anda impor.</p><button class="button quiet" type="button">Pilih halaman PDF</button></div><div class="cover-image-option" ${coverMode === "image" ? "" : "hidden"}><strong>Unggah gambar untuk sampul</strong><p>Gunakan JPG, PNG, atau WebP. Gambar akan langsung dipakai sebagai sampul.</p><input class="cover-background" type="file" accept="image/jpeg,image/png,image/webp" hidden /><button class="button quiet cover-image-upload" type="button">▧ Pilih gambar sampul</button><div class="cover-upload-status" aria-live="polite">${savedCover ? "Gambar sampul telah tersimpan" : "Belum ada gambar dipilih"}</div></div><div class="cover-custom-option" ${coverMode === "custom" ? "" : "hidden"}><label>Gambar latar sampul<input class="cover-background" type="file" accept="image/*" /></label><label>Gambar tambahan<input class="cover-illustration" type="file" accept="image/*" /></label><label>Judul sampul<input class="cover-title" value="${safeTitle}" /></label><div class="cover-control-row"><label>Jenis font<select class="cover-font"><option value="Caveat">Caveat</option><option value="Georgia">Georgia</option><option value="Arial">Arial</option><option value="Trebuchet MS">Trebuchet</option></select></label><label>Warna font<input class="cover-color" type="color" value="#442a22" /></label></div><label>Ukuran teks <output class="cover-size-output">42px</output><input class="cover-size" type="range" min="24" max="72" value="42" /></label></div><div class="cover-settings-option" ${coverMode === "settings" ? "" : "hidden"}><strong>Pengaturan posisi sampul</strong><p>Tentukan apakah sampul baru menambah halaman atau menggantikan halaman pertama PDF.</p></div></div><div class="cover-live-preview mode-${coverMode}"><span class="cover-preview-label">PRATINJAU SAMPUL</span><b>PDF</b><strong>${safeTitle}</strong></div></div><button class="button primary cover-continue" type="button">Simpan sampul & lanjutkan →</button>`;
     panel.appendChild(designer);
     const preview = designer.querySelector(
       ".cover-live-preview",
@@ -3348,7 +4065,7 @@ function UploadedEditor({
           '<span class="cover-preview-label">SAMPUL TERSIMPAN</span>';
     }
     if (coverMode === "custom")
-      preview.innerHTML = `<span class="cover-preview-label">KANVAS SAMPUL</span><h4>${title}</h4><small>Studio Flipbook</small>`;
+      preview.innerHTML = `<span class="cover-preview-label">KANVAS SAMPUL</span><h4>${safeTitle}</h4><small>Studio Flipbook</small>`;
     const pdfOption = designer.querySelector(
       ".cover-pdf-option",
     ) as HTMLElement;
@@ -3401,6 +4118,11 @@ function UploadedEditor({
         fileInput.addEventListener("change", async () => {
           const file = fileInput.files?.[0];
           if (!file) return;
+          const validationError = validatePdfFile(file);
+          if (validationError) {
+            pdfPageButton.textContent = validationError;
+            return;
+          }
           const objectUrl = URL.createObjectURL(file);
           const sourceBytes = await file.arrayBuffer();
           coverPdfBytes.set(title, sourceBytes);
@@ -3507,8 +4229,8 @@ function UploadedEditor({
       preview.className = `cover-live-preview mode-${nextMode}`;
       preview.innerHTML =
         nextMode === "pdf"
-          ? `<span class="cover-preview-label">PRATINJAU SAMPUL</span><b>PDF</b><strong>${title}</strong>`
-          : `<span class="cover-preview-label">PRATINJAU SAMPUL</span><h4>${title}</h4><small>Studio Flipbook</small>`;
+          ? `<span class="cover-preview-label">PRATINJAU SAMPUL</span><b>PDF</b><strong>${safeTitle}</strong>`
+          : `<span class="cover-preview-label">PRATINJAU SAMPUL</span><h4>${safeTitle}</h4><small>Studio Flipbook</small>`;
     };
     designer.querySelectorAll("[data-mode]").forEach((button) => {
       button.addEventListener("click", () =>
@@ -3701,7 +4423,7 @@ function UploadedEditor({
         </button>
         <div className="admin-nav-brand">
           <span className="brand-mark">F</span>
-          <strong>Flipbook Studio</strong>
+          <strong>E-Modul Flipbook</strong>
         </div>
         <div className="editor-workflow-menu">
           {(Object.keys(sections) as Array<keyof typeof sections>).map(
@@ -4172,43 +4894,93 @@ function CoverDesigner({
   );
 }
 
+function PdfPreviewRoute() {
+  const navigate = useNavigate();
+  const { title: encodedTitle = "" } = useParams();
+  const title = decodeURIComponent(encodedTitle);
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [missing, setMissing] = useState(false);
+  const [magnifierEnabled, setMagnifierEnabled] = useState(false);
+  const [zoomPercent, setZoomPercent] = useState(150);
+  useEffect(() => {
+    if (!title) { setMissing(true); return; }
+    const cached = uploadedPdfUrls.get(title);
+    if (cached) { setPdfUrl(cached); return; }
+    let active = true;
+    loadPdfBlob(title, (url) => { if (active) setPdfUrl(url); });
+    const timeout = window.setTimeout(() => { if (active) setMissing(true); }, 700);
+    return () => { active = false; window.clearTimeout(timeout); };
+  }, [title]);
+  if (missing && !pdfUrl) return <main className="standalone-flipbook-reader"><ErrorState title="PDF tidak tersedia">File hanya tersimpan di browser tempat PDF diunggah. Unggah kembali PDF tersebut dari halaman Koleksi.</ErrorState><button type="button" className="button quiet" onClick={() => navigate("/admin/collection")}>Kembali ke koleksi</button></main>;
+  return <main className="standalone-flipbook-reader" aria-label="Pratinjau flipbook"><header><strong>{title || "Pratinjau flipbook"}</strong><div className="reader-actions"><button type="button" className="button quiet" onClick={() => window.print()}>Cetak</button><button type="button" className="button quiet" onClick={() => navigate("/admin/collection")}>Keluar</button></div></header><section className="standalone-flipbook-stage">{pdfUrl ? <PdfFlipbook url={pdfUrl} title={title} magnifierEnabled={magnifierEnabled} zoomPercent={zoomPercent} /> : <LoadingState label="Memuat PDF…" />}</section><footer className="preview-footer-controls"><button type="button" className={`button quiet ${magnifierEnabled ? "is-active" : ""}`} onClick={() => setMagnifierEnabled((enabled) => !enabled)}>{magnifierEnabled ? "Kaca pembesar aktif" : "Aktifkan kaca pembesar"}</button>{magnifierEnabled && <label>Zoom <select value={zoomPercent} onChange={(event) => setZoomPercent(Number(event.target.value))}><option value={125}>125%</option><option value={150}>150%</option><option value={175}>175%</option><option value={200}>200%</option></select></label>}</footer></main>;
+}
+
 function PdfFlipbook({
   url,
   title,
   coverImage,
   placement,
+  magnifierEnabled: controlledMagnifierEnabled,
+  zoomPercent: controlledZoomPercent,
 }: {
   url: string;
   title: string;
   coverImage?: string;
   placement?: "insert" | "replace";
+  magnifierEnabled?: boolean;
+  zoomPercent?: number;
 }) {
+  type PdfQrRegion = { data: string; left: number; top: number; width: number; height: number };
   const flipRef = useRef<any>(null);
   useEffect(() => {
-    const next = () => flipRef.current?.pageFlip?.().flipNext();
-    const prev = () => flipRef.current?.pageFlip?.().flipPrev();
+    const next = () => flipRef.current?.pageFlip?.().flipNext("bottom");
+    const previous = () => flipRef.current?.pageFlip?.().flipPrev("bottom");
     window.addEventListener("flipbook-next", next);
-    window.addEventListener("flipbook-prev", prev);
-    return () => {
-      window.removeEventListener("flipbook-next", next);
-      window.removeEventListener("flipbook-prev", prev);
-    };
+    window.addEventListener("flipbook-prev", previous);
+    return () => { window.removeEventListener("flipbook-next", next); window.removeEventListener("flipbook-prev", previous); };
   }, []);
   const [pages, setPages] = useState<string[]>([]);
   const [progress, setProgress] = useState(0);
   const [renderError, setRenderError] = useState(false);
+  const [qrRegions, setQrRegions] = useState<Record<number, PdfQrRegion[]>>({});
+  const [activeQr, setActiveQr] = useState<string | null>(null);
+  const [localZoomPercent, setLocalZoomPercent] = useState(150);
+  const [localMagnifierEnabled, setLocalMagnifierEnabled] = useState(false);
+  const [bookZoom, setBookZoom] = useState(100);
+  const [lens, setLens] = useState<{ src: string; x: number; y: number; backgroundX: number; backgroundY: number; backgroundWidth: number; backgroundHeight: number } | null>(null);
+  const zoomPercent = controlledZoomPercent ?? localZoomPercent;
+  const magnifierEnabled = controlledMagnifierEnabled ?? localMagnifierEnabled;
+  useEffect(() => { if (!magnifierEnabled) setLens(null); }, [magnifierEnabled]);
+  const [pageHeight, setPageHeight] = useState(() => Math.max(420, Math.floor(window.innerHeight * 0.98) - 84));
+  useEffect(() => {
+    const resize = () => setPageHeight(Math.max(420, Math.floor(window.innerHeight * 0.98) - 84));
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, []);
   useEffect(() => {
     let cancelled = false;
     setProgress(0);
     setRenderError(false);
+    setQrRegions({});
     void fetch(url)
-      .then((response) => response.arrayBuffer())
-      .then((data) => pdfjsLib.getDocument({ data }).promise)
+      .then((response) => {
+        const length = Number(response.headers.get("content-length") ?? 0);
+        if (!response.ok || (Number.isFinite(length) && length > MAX_PDF_BYTES)) {
+          throw new Error("pdf_too_large_or_unavailable");
+        }
+        return response.arrayBuffer();
+      })
+      .then((data) => {
+        if (data.byteLength > MAX_PDF_BYTES) throw new Error("pdf_too_large");
+        return pdfjsLib.getDocument({ data }).promise;
+      })
       .then(async (pdf) => {
+        if (pdf.numPages > MAX_PDF_PAGES) throw new Error("pdf_too_many_pages");
         const rendered: string[] = [];
+        const renderScale = Math.max(2.25, Math.min(3, window.devicePixelRatio * 1.5));
         for (let i = 1; i <= pdf.numPages; i += 1) {
           const page = await pdf.getPage(i);
-          const viewport = page.getViewport({ scale: 1.15 });
+          const viewport = page.getViewport({ scale: renderScale });
           const canvas = document.createElement("canvas");
           canvas.width = viewport.width;
           canvas.height = viewport.height;
@@ -4216,7 +4988,34 @@ function PdfFlipbook({
             canvasContext: canvas.getContext("2d")!,
             viewport,
           }).promise;
-          rendered.push(canvas.toDataURL("image/jpeg", 0.88));
+          try {
+            let data = "";
+            let left = 0; let top = 0; let width = 0; let height = 0;
+            const NativeBarcodeDetector = (window as any).BarcodeDetector;
+            if (NativeBarcodeDetector) {
+              const detector = new NativeBarcodeDetector({ formats: ["qr_code", "code_128", "code_39", "ean_13", "ean_8", "upc_a", "upc_e", "itf", "data_matrix"] });
+              const code = (await detector.detect(canvas))[0];
+              if (code?.rawValue && code.boundingBox) {
+                data = code.rawValue;
+                left = Math.max(0, code.boundingBox.x / canvas.width * 100);
+                top = Math.max(0, code.boundingBox.y / canvas.height * 100);
+                width = Math.min(100 - left, code.boundingBox.width / canvas.width * 100);
+                height = Math.min(100 - top, code.boundingBox.height / canvas.height * 100);
+              }
+            }
+            if (!data) {
+              const result = await QrScanner.scanImage(canvas, { returnDetailedScanResult: true });
+              const xs = result.cornerPoints.map((point) => point.x);
+              const ys = result.cornerPoints.map((point) => point.y);
+              data = result.data;
+              left = Math.max(0, Math.min(...xs) / canvas.width * 100);
+              top = Math.max(0, Math.min(...ys) / canvas.height * 100);
+              width = Math.min(100 - left, (Math.max(...xs) - Math.min(...xs)) / canvas.width * 100);
+              height = Math.min(100 - top, (Math.max(...ys) - Math.min(...ys)) / canvas.height * 100);
+            }
+            if (!cancelled && /^https?:\/\//i.test(data)) setQrRegions((current) => ({ ...current, [i - 1]: [{ data, left, top, width, height }] }));
+          } catch { /* tidak ada QR/barcode yang dapat dibaca pada halaman ini */ }
+          rendered.push(canvas.toDataURL("image/jpeg", 0.97));
           if (!cancelled) setProgress(Math.round((i / pdf.numPages) * 100));
         }
         if (!cancelled) setPages(rendered);
@@ -4255,39 +5054,32 @@ function PdfFlipbook({
       ? [selectedCover, ...pages.slice(1)]
       : [selectedCover, ...pages]
     : pages;
+  const pageWidth = Math.max(280, Math.min(Math.round(pageHeight * 0.707), Math.floor((window.innerWidth - 32) / 2)));
+  const moveLens = (event: any) => {
+    if (!magnifierEnabled) { setLens(null); return; }
+    if (event.buttons) { setLens(null); return; }
+    const image = (event.target as HTMLElement).closest(".flip-page img") as HTMLImageElement | null;
+    if (!image) { setLens(null); return; }
+    const rect = image.getBoundingClientRect();
+    const stageRect = event.currentTarget.getBoundingClientRect();
+    const offsetX = Math.max(0, Math.min(rect.width, event.clientX - rect.left));
+    const offsetY = Math.max(0, Math.min(rect.height, event.clientY - rect.top));
+    const scale = zoomPercent / 100;
+    const lensRadius = window.innerWidth <= 700 ? 85 : 110;
+    setLens({ src: image.currentSrc || image.src, x: event.clientX - stageRect.left, y: event.clientY - stageRect.top, backgroundX: lensRadius - offsetX * scale, backgroundY: lensRadius - offsetY * scale, backgroundWidth: rect.width * scale, backgroundHeight: rect.height * scale });
+  };
   return (
-    <div className="flipbook-stage">
-      <HTMLFlipBook
-        key={`${title}-${selectedCover ? "with-cover" : "original-cover"}-${coverPlacement}`}
-        ref={flipRef}
-        width={420}
-        height={560}
-        size="stretch"
-        minWidth={280}
-        maxWidth={620}
-        minHeight={380}
-        maxHeight={760}
-        showCover
-        drawShadow
-        flippingTime={900}
-        usePortrait={false}
-        className="flipbook"
-        startPage={0}
-        autoSize
-      >
-        {flipbookPages.map((page, index) => (
-          <div className="flip-page" key={`${title}-${index}`}>
-            <img
-              src={page}
-              alt={
-                index === 0 && selectedCover
-                  ? `${title} sampul`
-                  : `${title} halaman ${selectedCover && coverPlacement === "replace" ? index + 1 : index}`
-              }
-            />
-          </div>
-        ))}
-      </HTMLFlipBook>
+    <div className="flipbook-stage flipbook-zoom-stage" onMouseMove={magnifierEnabled ? moveLens : undefined} onMouseLeave={() => setLens(null)}>
+      {typeof controlledMagnifierEnabled === "undefined" && <div className="flipbook-zoom-control"><button type="button" className={magnifierEnabled ? "is-active" : ""} onClick={(event) => { event.stopPropagation(); setLocalMagnifierEnabled((enabled) => !enabled); setLens(null); }}>{magnifierEnabled ? "Kaca pembesar aktif" : "Aktifkan kaca pembesar"}</button>{magnifierEnabled && <label>Zoom <select value={zoomPercent} onClick={(event) => event.stopPropagation()} onChange={(event) => setLocalZoomPercent(Number(event.target.value))}><option value={125}>125%</option><option value={150}>150%</option><option value={175}>175%</option><option value={200}>200%</option></select></label>}</div>}
+      <div className="flipbook-scale-wrap" style={{ transform: `scale(${bookZoom / 100})` }}><HTMLFlipBook ref={flipRef} width={pageWidth} height={pageHeight} size="stretch" minWidth={pageWidth} maxWidth={pageWidth} minHeight={pageHeight} maxHeight={pageHeight} showCover drawShadow flippingTime={900} usePortrait={false} showPageCorners={false} disableFlipByClick clickEventForward={false} className="flipbook" startPage={0}>
+        {flipbookPages.map((page, index) => {
+          const sourcePageIndex = selectedCover ? (coverPlacement === "replace" ? index : index - 1) : index;
+          return <div className="flip-page" key={`${title}-${index}`}><img src={page} alt={index === 0 && selectedCover ? `${title} sampul` : `${title} halaman ${index + 1}`} />{sourcePageIndex >= 0 && (qrRegions[sourcePageIndex] ?? []).map((qr, qrIndex) => <button key={`${index}-${qrIndex}`} type="button" className="pdf-qr-hotspot" aria-label="Buka media dari QR atau barcode" style={{ left: `${qr.left}%`, top: `${qr.top}%`, width: `${qr.width}%`, height: `${qr.height}%` }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onTouchStart={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActiveQr(qr.data); }} />)}</div>;
+        })}
+      </HTMLFlipBook></div>
+      <div className="pdf-flipbook-navigation" aria-label="Navigasi halaman dan ukuran tampilan"><button type="button" className="button quiet" onClick={() => flipRef.current?.pageFlip?.().flipPrev("bottom")}>Sebelumnya</button><button type="button" className="button primary" onClick={() => flipRef.current?.pageFlip?.().flipNext("bottom")}>Berikutnya</button><span className="book-zoom-controls"><button type="button" className="button quiet" disabled={bookZoom <= 75} onClick={() => setBookZoom((value) => Math.max(75, value - 10))} aria-label="Perkecil tampilan buku">−</button><output>{bookZoom}%</output><button type="button" className="button quiet" disabled={bookZoom >= 125} onClick={() => setBookZoom((value) => Math.min(125, value + 10))} aria-label="Perbesar tampilan buku">+</button></span></div>
+      {lens && <span className="flipbook-magnifier" aria-hidden="true" style={{ left: lens.x, top: lens.y, backgroundImage: `url("${lens.src}")`, backgroundSize: `${lens.backgroundWidth}px ${lens.backgroundHeight}px`, backgroundPosition: `${lens.backgroundX}px ${lens.backgroundY}px` }} />}
+      {activeQr && <div className="modal-backdrop pdf-qr-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveQr(null); }}><section className="confirm-modal qr-media-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-qr-title"><p className="eyebrow">MEDIA DARI QR / BARCODE</p><h2 id="pdf-qr-title">Konten pembelajaran</h2>{youtubeEmbedUrl(activeQr) ? <iframe className="pdf-qr-player" src={youtubeEmbedUrl(activeQr)} title="Video dari QR atau barcode" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : /\.(mp3|wav|ogg|m4a)(?:$|\?)/i.test(activeQr) ? <audio className="pdf-qr-audio" controls src={activeQr}>Browser Anda tidak mendukung pemutar audio.</audio> : /\.(mp4|webm)(?:$|\?)/i.test(activeQr) ? <video className="pdf-qr-player" controls src={activeQr}>Browser Anda tidak mendukung pemutar video.</video> : <><p>Tautan hasil pemindaian siap dibuka.</p><a className="button primary" href={activeQr} target="_blank" rel="noreferrer">Buka tautan</a></>}<label className="share-link-field"><span>Tautan</span><input readOnly value={activeQr} /></label><div className="confirm-actions"><button className="button quiet" type="button" onClick={() => setActiveQr(null)}>Tutup</button></div></section></div>}
     </div>
   );
 }
@@ -4542,7 +5334,95 @@ function RealEditor({
   );
 }
 
-function Editor({ book }: { book: MockBook }) {
+function PreviewRoute() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const routeSnapshot = location.state as any;
+  const [snapshot] = useState(() => {
+    if (routeSnapshot?.pages?.length) {
+      try {
+        window.sessionStorage.setItem("flipbook-studio-preview-snapshot", JSON.stringify(routeSnapshot));
+      } catch {
+        /* snapshot hanya tersedia selama navigasi ini */
+      }
+      return routeSnapshot;
+    }
+    try {
+      const stored = window.sessionStorage.getItem("flipbook-studio-preview-snapshot");
+      return stored ? JSON.parse(stored) : null;
+    } catch {
+      return null;
+    }
+  });
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const previewFlipRef = useRef<any>(null);
+  const [pdfUrls, setPdfUrls] = useState<Record<string, string>>({});
+
+  // PDF impor tetap disimpan sebagai berkas asli, bukan diubah menjadi bitmap.
+  useEffect(() => {
+    const allBlocks = Object.values(snapshot?.blocks ?? {}).flat() as Array<any>;
+    const keys = [...new Set(allBlocks.map((block) => block.pdfKey).filter(Boolean))] as string[];
+    keys.forEach((key) => {
+      const cached = uploadedPdfUrls.get(key);
+      if (cached) {
+        setPdfUrls((current) => current[key] ? current : { ...current, [key]: cached });
+        return;
+      }
+      loadPdfBlob(key, (url) => {
+        uploadedPdfUrls.set(key, url);
+        setPdfUrls((current) => current[key] ? current : { ...current, [key]: url });
+      });
+    });
+  }, [snapshot]);
+
+  if (!snapshot?.pages?.length) {
+    return <ErrorState title="Pratinjau belum tersedia">Buka pratinjau dari editor untuk melihat halaman yang sedang dibuat.</ErrorState>;
+  }
+
+  const pages = snapshot.pages as Array<{ id: string; label: string; body: string }>;
+  const blocks = snapshot.blocks ?? {};
+  const pageHeight = Math.max(360, window.innerHeight - Math.round(window.innerHeight * 0.02) - 84);
+  const pageWidth = Math.round(pageHeight * (210 / 297));
+  // The editor canvas is an A4 page with a 560px content width plus 43px
+  // padding on both sides. Components are stored in that editor coordinate space.
+  const editorCanvasWidth = 646;
+  const editorCanvasHeight = 914;
+  const scaleX = pageWidth / editorCanvasWidth;
+  const scaleY = pageHeight / editorCanvasHeight;
+  const bookPages = pages;
+  const fillsPageHeight = (block: any) =>
+    block.type === "Gambar" && block.y <= 0 && (block.height ?? 0) >= editorCanvasHeight * .85;
+  const renderPage = (page: (typeof pages)[number], index: number) => {
+    const pageBlocks = blocks[page.id] ?? [];
+    const isText = (block: any) => block.type === "Judul" || block.type === "Paragraf";
+    const blank = page.body === "" || page.body.startsWith("Gambar impor:") || (pageBlocks.length === 0 && page.id.startsWith("import-"));
+    const fullPage = pageBlocks.some((block: any) => block.fullPage || block.id.startsWith("import-"));
+    return <div className="flipbook-canvas-page" key={page.id}>
+      {!blank && !fullPage && <><div className="preview-canvas-header">{snapshot.canvasHeader}</div><p className="preview-canvas-eyebrow">BAGIAN {String(index + 1).padStart(2, "0")}</p><h3>{index === snapshot.selectedIndex ? snapshot.title : page.label}</h3><p className="preview-canvas-intro">{page.body}</p></>}
+      {pageBlocks.map((block: any) => <section key={block.id} className={`preview-canvas-block type-${block.type.toLowerCase()}${block.fullPage ? " is-full-page" : ""}${fillsPageHeight(block) ? " fills-page-height" : ""}${block.preserveAspectRatio ? " preserve-aspect" : ""}${block.showQr ? " is-qr" : ""}`} style={{ left: block.x * scaleX, top: block.y * scaleY, bottom: fillsPageHeight(block) ? 0 : undefined, width: isText(block) ? (block.width ?? 320) * scaleX : (block.showQr || block.type === "Gambar") ? (block.width ?? 260) * scaleX : undefined, height: !block.fullPage && !fillsPageHeight(block) && (block.showQr || block.type === "Gambar") ? (block.height ?? (block.showQr ? 260 : 220)) * scaleY : undefined, minHeight: isText(block) ? (block.height ?? (block.type === "Judul" ? 72 : 112)) * scaleY : undefined }}>
+        {block.showQr && block.url && <img className="flipbook-qr" src={`https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(block.url)}`} alt={`QR Code untuk ${block.text}`} />}
+        {block.type === "Gambar" ? block.pdfKey ? (pdfUrls[block.pdfKey] ? <iframe className="embedded-pdf-page" src={`${pdfUrls[block.pdfKey]}#page=${block.pdfPage ?? 1}&zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`} title={block.text} /> : <span className="flipbook-preview-media">Memuat PDF…</span>) : block.imageSrc ? <img src={block.imageSrc} alt={block.text} /> : <span className="flipbook-preview-media">Gambar · {block.text}</span> : isText(block) ? <div style={{ color: block.fontColor ?? "#315e62", fontFamily: block.fontFamily ?? "Arial", fontSize: `${block.fontSize ?? (block.type === "Judul" ? 28 : 16)}px`, fontWeight: block.fontWeight ?? (block.type === "Judul" ? "bold" : "normal"), fontStyle: block.fontStyle ?? "normal", textAlign: block.textAlign ?? "left", textDecoration: block.textDecoration ?? "none" }}>{block.text}</div> : <span className="flipbook-preview-media">{block.type} · {block.text}</span>}
+      </section>)}
+    </div>;
+  };
+
+  return <main className="standalone-flipbook-reader" aria-label="Pratinjau flipbook">
+    <header><strong>{snapshot.book?.title ?? "Pratinjau flipbook"}</strong><div className="reader-actions"><button type="button" className="button quiet" onClick={() => window.print()}>Cetak</button><button type="button" className="button quiet" onClick={() => navigate("/admin/collection")}>Keluar</button></div></header>
+    <section className="standalone-flipbook-stage">
+      <HTMLFlipBook ref={previewFlipRef} width={pageWidth} height={pageHeight} size="stretch" minWidth={260} maxWidth={pageWidth} minHeight={368} maxHeight={pageHeight} showCover drawShadow flippingTime={650} usePortrait={false} className="editor-preview-flipbook" startPage={0} showPageCorners={false} disableFlipByClick clickEventForward={false} mobileScrollSupport={false} onInit={() => { const cover = previewFlipRef.current?.pageFlip().getPageCollection().getPage(0) as { setDensity: (density: "soft") => void } | undefined; cover?.setDensity("soft"); }} onFlip={(event: { data: number }) => setPreviewIndex(event.data)}>
+        {bookPages.map((page, index) => renderPage(page, pages.indexOf(page)))}
+      </HTMLFlipBook>
+    </section>
+    <footer><button className="button quiet" type="button" disabled={previewIndex === 0} onClick={() => previewFlipRef.current?.pageFlip().flipPrev("bottom")}>Sebelumnya</button><button className="button primary" type="button" disabled={previewIndex >= bookPages.length - 1} onClick={() => previewFlipRef.current?.pageFlip().flipNext("bottom")}>Berikutnya</button></footer>
+  </main>;
+}
+
+function Editor({
+  book,
+}: {
+  book: MockBook;
+}) {
+  const navigate = useNavigate();
   type CanvasBlock = {
     id: string;
     type:
@@ -4556,11 +5436,28 @@ function Editor({ book }: { book: MockBook }) {
     text: string;
     x: number;
     y: number;
+    width?: number;
+    height?: number;
+    fontSize?: number;
+    fontFamily?: string;
+    fontWeight?: "normal" | "bold";
+    fontStyle?: "normal" | "italic";
+    textDecoration?: "none" | "underline";
+    textAlign?: "left" | "center" | "right" | "justify";
+    fontColor?: string;
     imageSrc?: string;
+    pdfKey?: string;
+    pdfPage?: number;
+    pdfAspectRatio?: number;
+    pdfName?: string;
     url?: string;
+    showQr?: boolean;
+    fullPage?: boolean;
+    preserveAspectRatio?: boolean;
   };
   const editorPagesKey = `flipbook-studio-interactive-pages-${book.id}`;
   const [pages, setPages] = useState(() => {
+    if (book.id === "new-interactive-book") return book.pages;
     try {
       const raw = window.localStorage.getItem(editorPagesKey);
       const stored = raw ? JSON.parse(raw) : null;
@@ -4570,52 +5467,276 @@ function Editor({ book }: { book: MockBook }) {
     }
   });
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [pageNumberInput, setPageNumberInput] = useState("1");
   const [saved, setSaved] = useState(true);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const publicationKey = `flipbook-studio-publication-status-${book.id}`;
+  const [publicationStatus, setPublicationStatus] = useState<"Draf" | "Terpublikasi">(() => {
+    const stored = window.localStorage.getItem(publicationKey);
+    return stored === "Terpublikasi" ? "Terpublikasi" : "Draf";
+  });
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewIndex, setPreviewIndex] = useState(0);
+  const [previewDirection, setPreviewDirection] = useState<"forward" | "backward">("forward");
+  const [previewFullscreen, setPreviewFullscreen] = useState(false);
+  const previewFlipRef = useRef<any>(null);
+  const [pagesToDelete, setPagesToDelete] = useState<string[]>([]);
+  const [pageSelection, setPageSelection] = useState("");
+  const [confirmAllDelete, setConfirmAllDelete] = useState(false);
+  useEffect(() => {
+    if (!deleteDialogOpen) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = previousOverflow; };
+  }, [deleteDialogOpen]);
   useEffect(() => {
     window.dispatchEvent(
       new CustomEvent("interactive-editor-changes", { detail: !saved }),
     );
   }, [saved]);
+  const [title, setTitle] = useState(book.pages[0]?.label ?? "Halaman baru");
+  const [canvasHeader, setCanvasHeader] = useState(
+    "E-MODUL IPAS KELAS V  |  PERAN MANUSIA DALAM EKOSISTEM",
+  );
+  const [blocks, setBlocks] = useState<Record<string, CanvasBlock[]>>({});
+  const [editorPdfUrls, setEditorPdfUrls] = useState<Record<string, string>>({});
+  const [importError, setImportError] = useState("");
+  const [availableVideos, setAvailableVideos] = useState<Array<{ id: string; title: string; public_url: string }>>([]);
+  const [availableAudios, setAvailableAudios] = useState<Array<{ id: string; title: string; public_url: string }>>([]);
+  const [showVideoLibrary, setShowVideoLibrary] = useState(false);
+  const [showAudioLibrary, setShowAudioLibrary] = useState(false);
+  const [showVideoSourcePicker, setShowVideoSourcePicker] = useState(false);
+  const [showYoutubeLinkModal, setShowYoutubeLinkModal] = useState(false);
+  const [youtubeLink, setYoutubeLink] = useState("");
+  const [youtubeLinkError, setYoutubeLinkError] = useState("");
+  const [videoTargetBlockId, setVideoTargetBlockId] = useState<string | null>(null);
+  const [selectedBlockId, setSelectedBlockId] = useState<string | null>(null);
+  const [insertAt, setInsertAt] = useState(1);
+  const [importing, setImporting] = useState(false);
+  const importInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const editorHistoryRef = useRef<string[]>([]);
+  const editorHistoryPositionRef = useRef(-1);
+  const restoringHistoryRef = useRef(false);
+  const [historyControls, setHistoryControls] = useState({ canUndo: false, canRedo: false });
+  const selected = pages[selectedIndex];
   useEffect(() => {
-    setPageNumberInput(String(selectedIndex + 1));
-  }, [selectedIndex]);
+    const snapshot = JSON.stringify({ pages, blocks, canvasHeader });
+    if (restoringHistoryRef.current) {
+      restoringHistoryRef.current = false;
+      return;
+    }
+    const history = editorHistoryRef.current.slice(0, editorHistoryPositionRef.current + 1);
+    if (history[history.length - 1] === snapshot) return;
+    history.push(snapshot);
+    editorHistoryRef.current = history.slice(-50);
+    editorHistoryPositionRef.current = editorHistoryRef.current.length - 1;
+    setHistoryControls({ canUndo: editorHistoryPositionRef.current > 0, canRedo: false });
+  }, [pages, blocks, canvasHeader]);
+  const restoreHistory = (direction: -1 | 1) => {
+    const nextPosition = editorHistoryPositionRef.current + direction;
+    const snapshot = editorHistoryRef.current[nextPosition];
+    if (!snapshot) return;
+    const next = JSON.parse(snapshot);
+    restoringHistoryRef.current = true;
+    editorHistoryPositionRef.current = nextPosition;
+    setPages(next.pages);
+    setBlocks(next.blocks);
+    setCanvasHeader(next.canvasHeader);
+    const nextIndex = Math.min(selectedIndex, Math.max(0, next.pages.length - 1));
+    setSelectedIndex(nextIndex);
+    setTitle(next.pages[nextIndex]?.label ?? "Halaman baru");
+    setSelectedBlockId(null);
+    setSaved(false);
+    setHistoryControls({
+      canUndo: nextPosition > 0,
+      canRedo: nextPosition < editorHistoryRef.current.length - 1,
+    });
+  };
   useEffect(() => {
-    const save = () => {
+    const save = (event: Event) => {
+      const storageKey = (event as CustomEvent<{ storageKey?: string }>).detail?.storageKey ?? editorPagesKey;
       try {
-        window.localStorage.setItem(editorPagesKey, JSON.stringify(pages));
+        const documentState = { version: 1, pages, blocks, canvasHeader, title, publicationStatus };
+        saveEditorDocument(storageKey, documentState);
+        window.localStorage.setItem(storageKey, JSON.stringify(pages));
+        window.localStorage.setItem(`${storageKey}-document`, JSON.stringify(documentState));
       } catch {
-        /* penyimpanan browser tidak tersedia */
+        // Draf lengkap tetap tersimpan di IndexedDB; localStorage hanya cache kompatibilitas.
       }
       setSaved(true);
     };
     window.addEventListener("interactive-editor-save", save);
     return () => window.removeEventListener("interactive-editor-save", save);
-  }, [editorPagesKey, pages]);
-  const [tab, setTab] = useState<"halaman" | "komponen">("halaman");
-  const [title, setTitle] = useState(book.pages[0]?.label ?? "Halaman baru");
-  const [canvasHeader, setCanvasHeader] = useState(
-    "E-MODUL IPAS KELAS V  |  PERAN MANUSIA DALAM EKOSISTEM",
-  );
-  const [canvasFooter, setCanvasFooter] = useState(
-    "Flipbook e-modul • Berorientasi ESD",
-  );
-  const [blocks, setBlocks] = useState<Record<string, CanvasBlock[]>>({});
-  const [insertAt, setInsertAt] = useState(1);
-  const [importing, setImporting] = useState(false);
-  const importInputRef = useRef<HTMLInputElement>(null);
-  const selected = pages[selectedIndex];
+  }, [editorPagesKey, pages, blocks, canvasHeader, title, publicationStatus]);
+  useEffect(() => {
+    let active = true;
+    const restoreDocument = (documentState: any) => {
+      if (!active || !documentState || !Array.isArray(documentState.pages)) return;
+      setPages(documentState.pages);
+      if (documentState.blocks && typeof documentState.blocks === "object") setBlocks(documentState.blocks);
+      if (typeof documentState.canvasHeader === "string") setCanvasHeader(documentState.canvasHeader);
+      if (typeof documentState.title === "string") setTitle(documentState.title);
+    };
+    try {
+      const raw = window.localStorage.getItem(`${editorPagesKey}-document`);
+      const documentState = raw ? JSON.parse(raw) : null;
+      restoreDocument(documentState);
+    } catch {
+      setImportError("Draf lokal tidak dapat dipulihkan. Periksa penyimpanan browser.");
+    }
+    loadEditorDocument(editorPagesKey, restoreDocument);
+    return () => { active = false; };
+  }, [editorPagesKey]);
+  useEffect(() => {
+    const keys = [...new Set(Object.values(blocks).flat().map((block) => block.pdfKey).filter(Boolean))] as string[];
+    keys.forEach((key) => {
+      const cached = uploadedPdfUrls.get(key);
+      if (cached) {
+        setEditorPdfUrls((current) => current[key] ? current : { ...current, [key]: cached });
+        return;
+      }
+      loadPdfBlob(key, (url) => {
+        uploadedPdfUrls.set(key, url);
+        setEditorPdfUrls((current) => current[key] ? current : { ...current, [key]: url });
+      });
+    });
+  }, [blocks]);
+  useEffect(() => {
+    const missingRatios = Object.values(blocks)
+      .flat()
+      .filter((block) => block.pdfKey && !block.pdfAspectRatio) as CanvasBlock[];
+    const keys = [...new Set(missingRatios.map((block) => block.pdfKey!))];
+    keys.forEach((key) => {
+      const hydrate = async (url: string) => {
+        const pdf = await pdfjsLib.getDocument({ url }).promise;
+        const ratios = new Map<number, number>();
+        for (const block of missingRatios.filter((item) => item.pdfKey === key)) {
+          const pageNumber = block.pdfPage ?? 1;
+          if (!ratios.has(pageNumber)) {
+            const page = await pdf.getPage(pageNumber);
+            const viewport = page.getViewport({ scale: 1 });
+            ratios.set(pageNumber, viewport.width / viewport.height);
+          }
+        }
+        setBlocks((current) => Object.fromEntries(Object.entries(current).map(([pageId, pageBlocks]) => [
+          pageId,
+          pageBlocks.map((block) => block.pdfKey === key && !block.pdfAspectRatio
+            ? { ...block, pdfAspectRatio: ratios.get(block.pdfPage ?? 1) }
+            : block),
+        ])));
+      };
+      const cached = uploadedPdfUrls.get(key);
+      if (cached) void hydrate(cached).catch(() => undefined);
+      else loadPdfBlob(key, (url) => void hydrate(url).catch(() => undefined));
+    });
+  }, [blocks]);
+  useEffect(() => {
+    if (!supabase) return;
+    void supabase.auth.getUser().then(async ({ data }) => {
+      if (!data.user) return;
+      const { data: media } = await supabase.from("published_media").select("id,title,public_url,media_type").eq("owner_admin_id", data.user.id).order("created_at", { ascending: false });
+      if (media) { setAvailableVideos(media.filter((item) => item.media_type === "video")); setAvailableAudios(media.filter((item) => item.media_type === "audio")); }
+    });
+  }, []);
+  useEffect(() => {
+    const warnBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (!saved) { event.preventDefault(); event.returnValue = ""; }
+    };
+    window.addEventListener("beforeunload", warnBeforeUnload);
+    return () => window.removeEventListener("beforeunload", warnBeforeUnload);
+  }, [saved]);
   const selectedBlocks = selected ? (blocks[selected.id] ?? []) : [];
+  const selectedBlock = selectedBlocks.find((block) => block.id === selectedBlockId);
+  const isTextBlock = (block?: CanvasBlock) =>
+    block?.type === "Judul" || block?.type === "Paragraf";
+  const isBlankCanvas =
+    selected?.body === "" ||
+    selected?.body.startsWith("Gambar impor:") ||
+    (selectedBlocks.length === 0 && selected?.id.startsWith("import-"));
+  const isFullPage = selectedBlocks.some(
+    (block) => block.fullPage || block.id.startsWith("import-"),
+  );
+  const nativePdfBlock = selectedBlocks.find(
+    (block) => block.fullPage && block.pdfKey,
+  );
+  const previewPage = pages[previewIndex];
+  const previewBlocks = previewPage ? (blocks[previewPage.id] ?? []) : [];
+  const previewIsBlank =
+    previewPage?.body === "" ||
+    previewPage?.body.startsWith("Gambar impor:") ||
+    (previewBlocks.length === 0 && previewPage?.id.startsWith("import-"));
+  const previewIsFullPage = previewBlocks.some(
+    (block) => block.fullPage || block.id.startsWith("import-"),
+  );
+  const previewPageHeight = previewFullscreen
+    ? Math.max(360, window.innerHeight - Math.round(window.innerHeight * 0.02) - 84)
+    : 594;
+  const previewPageWidth = previewFullscreen
+    ? Math.round(previewPageHeight * (210 / 297))
+    : 420;
+  const previewBookPages = pages;
+  const setPublication = (status: "Draf" | "Terpublikasi") => {
+    setPublicationStatus(status);
+    window.localStorage.setItem(publicationKey, status);
+  };
+  const renderPreviewCanvas = (page: (typeof pages)[number], index: number) => {
+    const pageBlocks = blocks[page.id] ?? [];
+    const blank = page.body === "" || page.body.startsWith("Gambar impor:") || (pageBlocks.length === 0 && page.id.startsWith("import-"));
+    const fullPage = pageBlocks.some((block) => block.fullPage || block.id.startsWith("import-"));
+    return <div className="flipbook-canvas-page" key={page.id}>
+      {!blank && !fullPage && <><div className="preview-canvas-header">{canvasHeader}</div><p className="preview-canvas-eyebrow">BAGIAN {String(index + 1).padStart(2, "0")}</p><h3>{index === selectedIndex ? title : page.label}</h3><p className="preview-canvas-intro">{page.body}</p></>}
+      {pageBlocks.map((block) => <section key={block.id} className={`preview-canvas-block type-${block.type.toLowerCase()}${block.fullPage ? " is-full-page" : ""}${block.preserveAspectRatio ? " preserve-aspect" : ""}`} style={{ left: block.x, top: block.y, width: isTextBlock(block) ? block.width ?? 320 : (block.showQr || block.type === "Gambar") ? block.width ?? 260 : undefined, height: !block.fullPage && (block.showQr || block.type === "Gambar") ? block.height ?? (block.showQr ? 260 : 220) : undefined, minHeight: isTextBlock(block) ? block.height ?? (block.type === "Judul" ? 72 : 112) : undefined }}>
+        {block.type === "Gambar" ? block.pdfKey ? (editorPdfUrls[block.pdfKey] ? <iframe className="embedded-pdf-page" src={`${editorPdfUrls[block.pdfKey]}#page=${block.pdfPage ?? 1}&zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`} title={block.text} /> : <span className="flipbook-preview-media">Memuat PDF…</span>) : block.imageSrc ? <img src={block.imageSrc} alt={block.text} /> : <span className="flipbook-preview-media">Gambar · {block.text}</span> : isTextBlock(block) ? <div style={{ color: block.fontColor ?? "#315e62", fontFamily: block.fontFamily ?? "Arial", fontSize: `${block.fontSize ?? (block.type === "Judul" ? 28 : 16)}px`, fontWeight: block.fontWeight ?? (block.type === "Judul" ? "bold" : "normal"), fontStyle: block.fontStyle ?? "normal", textAlign: block.textAlign ?? "left", textDecoration: block.textDecoration ?? "none" }}>{block.text}</div> : <span className="flipbook-preview-media">{block.type} · {block.text}</span>}
+      </section>)}
+    </div>;
+  };
   const addPage = () => {
     const next = {
       id: `page-${Date.now()}`,
       label: `Halaman ${pages.length + 1}`,
       kind: "Halaman" as const,
-      body: "Mulai isi halaman A4 ini dengan komponen yang Anda perlukan.",
+      body: "",
     };
     setPages((current) => [...current, next]);
     setSelectedIndex(pages.length);
     setTitle(next.label);
+    setSaved(false);
+  };
+  const openDeleteDialog = () => {
+    if (!selected) return;
+    setPagesToDelete([selected.id]);
+    setPageSelection(String(selectedIndex + 1));
+    setConfirmAllDelete(false);
+    setDeleteDialogOpen(true);
+  };
+  const selectPagesFromText = (value: string) => {
+    setPageSelection(value);
+    const numbers = new Set<number>();
+    value.split(",").forEach((part) => {
+      const [fromText, toText] = part.trim().split("-");
+      const from = Number(fromText);
+      const to = Number(toText ?? fromText);
+      if (!Number.isInteger(from) || !Number.isInteger(to)) return;
+      for (let number = Math.max(1, Math.min(from, to)); number <= Math.min(pages.length, Math.max(from, to)); number += 1) numbers.add(number);
+    });
+    setPagesToDelete(pages.filter((_page, index) => numbers.has(index + 1)).map((page) => page.id));
+  };
+  const deletePages = () => {
+    if (!pagesToDelete.length) return;
+    const selectedIds = new Set(pagesToDelete);
+    const remainingPages = pages.filter((page) => !selectedIds.has(page.id));
+    const nextPages = remainingPages.length
+      ? remainingPages
+      : [{ id: `page-${Date.now()}`, label: "Halaman 1", kind: "Halaman" as const, body: "" }];
+    setBlocks((current) =>
+      Object.fromEntries(
+        Object.entries(current).filter(([id]) => !selectedIds.has(id)),
+      ),
+    );
+    const nextIndex = Math.min(selectedIndex, nextPages.length - 1);
+    setSelectedIndex(nextIndex);
+    setTitle(nextPages[nextIndex].label);
+    setDeleteDialogOpen(false);
     setSaved(false);
   };
   const addComponent = (type: CanvasBlock["type"]) => {
@@ -4635,11 +5756,25 @@ function Editor({ book }: { book: MockBook }) {
       text: copy[type],
       x: 36,
       y: 190 + ((selectedBlocks.length * 86) % 330),
+      ...(type === "Judul"
+        ? { width: 320, height: 72, fontSize: 28, fontFamily: "Arial", fontWeight: "bold" as const }
+        : type === "Paragraf"
+          ? { width: 320, height: 112, fontSize: 16, fontFamily: "Arial", fontWeight: "normal" as const }
+          : {}),
     };
     setBlocks((current) => ({
       ...current,
       [selected.id]: [...(current[selected.id] ?? []), next],
     }));
+    setSelectedBlockId(next.id);
+    if (type === "Video") {
+      setVideoTargetBlockId(next.id);
+      setShowVideoSourcePicker(true);
+    }
+    if (type === "Suara") {
+      setVideoTargetBlockId(next.id);
+      setShowAudioLibrary(true);
+    }
     setSaved(false);
   };
   const updateBlock = (id: string, text: string) => {
@@ -4657,20 +5792,55 @@ function Editor({ book }: { book: MockBook }) {
     setBlocks((current) => ({
       ...current,
       [selected.id]: (current[selected.id] ?? []).map((block) =>
-        block.id === id ? { ...block, url } : block,
+        block.id === id ? { ...block, url, showQr: false } : block,
+      ),
+    }));
+    setSaved(false);
+  };
+  const setVideoFromQrCollection = (id: string, url: string) => {
+    if (!selected) return;
+    setBlocks((current) => ({ ...current, [selected.id]: (current[selected.id] ?? []).map((block) => block.id === id ? { ...block, url, showQr: true } : block) }));
+    setSaved(false);
+  };
+  const updateBlockStyle = (
+    id: string,
+    style: Pick<CanvasBlock, "fontSize" | "fontFamily" | "fontWeight" | "fontStyle" | "textDecoration" | "textAlign" | "fontColor">,
+  ) => {
+    if (!selected) return;
+    setBlocks((current) => ({
+      ...current,
+      [selected.id]: (current[selected.id] ?? []).map((block) =>
+        block.id === id ? { ...block, ...style } : block,
       ),
     }));
     setSaved(false);
   };
   const removeBlock = (id: string) => {
     if (!selected) return;
+    const removed = selectedBlocks.find((block) => block.id === id);
     setBlocks((current) => ({
       ...current,
       [selected.id]: (current[selected.id] ?? []).filter(
         (block) => block.id !== id,
       ),
     }));
+    if (removed?.fullPage || removed?.id.startsWith("import-")) {
+      setPages((current) =>
+        current.map((page) =>
+          page.id === selected.id ? { ...page, body: "" } : page,
+        ),
+      );
+    }
+    if (selectedBlockId === id) setSelectedBlockId(null);
     setSaved(false);
+  };
+  const cancelPendingMedia = () => {
+    if (selected && videoTargetBlockId) {
+      setBlocks((current) => ({ ...current, [selected.id]: (current[selected.id] ?? []).filter((block) => block.id !== videoTargetBlockId) }));
+      setSelectedBlockId(null);
+      setSaved(false);
+    }
+    setShowYoutubeLinkModal(false); setShowVideoSourcePicker(false); setShowVideoLibrary(false); setShowAudioLibrary(false); setVideoTargetBlockId(null);
   };
   const youtubeEmbedUrl = (value?: string) => {
     if (!value) return "";
@@ -4684,6 +5854,11 @@ function Editor({ book }: { book: MockBook }) {
     } catch {
       return "";
     }
+  };
+  const insertYoutubeVideo = () => {
+    if (!videoTargetBlockId || !youtubeEmbedUrl(youtubeLink)) { setYoutubeLinkError("Masukkan tautan YouTube yang valid."); return; }
+    setVideoFromQrCollection(videoTargetBlockId, youtubeLink.trim());
+    setShowYoutubeLinkModal(false); setVideoTargetBlockId(null); setYoutubeLink(""); setYoutubeLinkError("");
   };
   const moveBlock = (
     event: React.PointerEvent<HTMLButtonElement>,
@@ -4700,14 +5875,16 @@ function Editor({ book }: { book: MockBook }) {
     const initialY = block.y;
     event.currentTarget.setPointerCapture(event.pointerId);
     const move = (moveEvent: PointerEvent) => {
-      const maxX = Math.max(12, canvas.clientWidth - 185);
-      const maxY = Math.max(12, canvas.clientHeight - 110);
+      const blockWidth = block.width ?? (block.showQr ? 260 : block.type === "Gambar" ? 260 : isTextBlock(block) ? 320 : 185);
+      const blockHeight = block.height ?? (block.showQr ? 260 : block.type === "Gambar" ? 220 : block.type === "Judul" ? 72 : isTextBlock(block) ? 112 : 110);
+      const maxX = Math.max(0, canvas.clientWidth - blockWidth);
+      const maxY = Math.max(0, canvas.clientHeight - blockHeight);
       const x = Math.max(
-        12,
+        0,
         Math.min(maxX, initialX + moveEvent.clientX - originX),
       );
       const y = Math.max(
-        90,
+        0,
         Math.min(maxY, initialY + moveEvent.clientY - originY),
       );
       setBlocks((current) => ({
@@ -4727,8 +5904,57 @@ function Editor({ book }: { book: MockBook }) {
     window.addEventListener("pointerup", stop);
     window.addEventListener("pointercancel", stop);
   };
+  const resizeBlock = (
+    event: React.PointerEvent<HTMLButtonElement>,
+    id: string,
+  ) => {
+    if (!selected) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const canvas = event.currentTarget.closest(".canvas") as HTMLElement | null;
+    const block = (blocks[selected.id] ?? []).find((item) => item.id === id);
+    if (!canvas || !block) return;
+    const originX = event.clientX;
+    const originY = event.clientY;
+    const initialWidth = block.width ?? (block.showQr ? 260 : block.type === "Gambar" ? 260 : 320);
+    const initialHeight = block.height ?? (block.showQr ? 260 : block.type === "Gambar" ? 220 : block.type === "Judul" ? 72 : 112);
+    event.currentTarget.setPointerCapture(event.pointerId);
+    const move = (moveEvent: PointerEvent) => {
+      const maxWidth = Math.max(1, canvas.clientWidth - block.x);
+      const maxHeight = Math.max(1, canvas.clientHeight - block.y);
+      const clamp = (value: number, minimum: number, maximum: number) =>
+        Math.min(Math.max(value, Math.min(minimum, maximum)), maximum);
+      const side = clamp(
+        initialWidth + moveEvent.clientX - originX,
+        120,
+        Math.min(maxWidth, maxHeight),
+      );
+      const width = block.showQr
+        ? side
+        : clamp(initialWidth + moveEvent.clientX - originX, 120, maxWidth);
+      const height = block.showQr
+        ? side
+        : clamp(initialHeight + moveEvent.clientY - originY, 48, maxHeight);
+      setBlocks((current) => ({
+        ...current,
+        [selected.id]: (current[selected.id] ?? []).map((item) =>
+          item.id === id ? { ...item, width, height } : item,
+        ),
+      }));
+      setSaved(false);
+    };
+    const stop = () => {
+      window.removeEventListener("pointermove", move);
+      window.removeEventListener("pointerup", stop);
+      window.removeEventListener("pointercancel", stop);
+    };
+    window.addEventListener("pointermove", move);
+    window.addEventListener("pointerup", stop);
+    window.addEventListener("pointercancel", stop);
+  };
   const insertImportedPages = async (file: File) => {
     setImporting(true);
+    setImportError("");
     try {
       const baseName = file.name.replace(/\.[^/.]+$/, "") || "Dokumen impor";
       const imported: Array<{
@@ -4739,19 +5965,24 @@ function Editor({ book }: { book: MockBook }) {
         file.type === "application/pdf" ||
         file.name.toLowerCase().endsWith(".pdf")
       ) {
+        const validationError = validatePdfFile(file);
+        if (validationError) throw new Error(validationError);
+        // Hanya membaca metadata dan jumlah halaman. PDF tidak dirender ke
+        // canvas agar teks/vector asli dari Word tetap tajam.
         const documentPdf = await pdfjsLib.getDocument({
           data: await file.arrayBuffer(),
         }).promise;
+        if (documentPdf.numPages > MAX_PDF_PAGES) {
+          throw new Error(`PDF maksimal ${MAX_PDF_PAGES} halaman.`);
+        }
+        const pdfKey = `editor-pdf-${book.id}-${Date.now()}`;
+        const pdfUrl = URL.createObjectURL(file);
+        uploadedPdfUrls.set(pdfKey, pdfUrl);
+        setEditorPdfUrls((current) => ({ ...current, [pdfKey]: pdfUrl }));
+        savePdfBlob(pdfKey, file);
         for (let index = 1; index <= documentPdf.numPages; index += 1) {
-          const page = await documentPdf.getPage(index);
-          const viewport = page.getViewport({ scale: 1.35 });
-          const canvas = document.createElement("canvas");
-          canvas.width = Math.ceil(viewport.width);
-          canvas.height = Math.ceil(viewport.height);
-          await page.render({
-            canvasContext: canvas.getContext("2d")!,
-            viewport,
-          }).promise;
+          const sourcePage = await documentPdf.getPage(index);
+          const sourceViewport = sourcePage.getViewport({ scale: 1 });
           const id = `import-${Date.now()}-${index}`;
           imported.push({
             page: {
@@ -4764,9 +5995,13 @@ function Editor({ book }: { book: MockBook }) {
               id: `${id}-image`,
               type: "Gambar",
               text: `Halaman ${index}`,
-              imageSrc: canvas.toDataURL("image/jpeg", 0.9),
-              x: 24,
-              y: 112,
+              pdfKey,
+              pdfPage: index,
+              pdfAspectRatio: sourceViewport.width / sourceViewport.height,
+              pdfName: file.name,
+              x: 0,
+              y: 0,
+              fullPage: true,
             },
           });
         }
@@ -4777,23 +6012,32 @@ function Editor({ book }: { book: MockBook }) {
           reader.onerror = reject;
           reader.readAsDataURL(file);
         });
-        const id = `import-${Date.now()}-1`;
-        imported.push({
-          page: {
+        const dimensions = await new Promise<{ width: number; height: number }>((resolve, reject) => {
+          const image = new Image();
+          image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+          image.onerror = () => reject(new Error("Gambar tidak dapat dibaca."));
+          image.src = imageSrc;
+        });
+        const id = `image-${Date.now()}`;
+        const width = 260;
+        const height = Math.max(120, Math.min(330, Math.round(width * dimensions.height / dimensions.width)));
+        setBlocks((current) => ({
+          ...current,
+          [selected.id]: [...(current[selected.id] ?? []), {
             id,
-            label: baseName,
-            kind: "Halaman" as const,
-            body: `Gambar impor: ${file.name}`,
-          },
-          block: {
-            id: `${id}-image`,
             type: "Gambar",
             text: baseName,
             imageSrc,
-            x: 24,
-            y: 112,
-          },
-        });
+            x: 48,
+            y: 48,
+            width,
+            height,
+            preserveAspectRatio: true,
+          }],
+        }));
+        setSelectedBlockId(id);
+        setSaved(false);
+        return;
       }
       if (!imported.length) return;
       const position = Math.max(0, Math.min(pages.length, insertAt - 1));
@@ -4811,9 +6055,12 @@ function Editor({ book }: { book: MockBook }) {
       setSelectedIndex(position);
       setTitle(imported[0].page.label);
       setSaved(false);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : "Dokumen tidak dapat diimpor.");
     } finally {
       setImporting(false);
       if (importInputRef.current) importInputRef.current.value = "";
+      if (imageInputRef.current) imageInputRef.current.value = "";
     }
   };
   if (!selected)
@@ -4822,15 +6069,24 @@ function Editor({ book }: { book: MockBook }) {
         Tambahkan halaman untuk mulai menyusun flipbook.
       </ErrorState>
     );
-  const components: Array<{ type: CanvasBlock["type"]; icon: string }> = [
-    { type: "Judul", icon: "T" },
-    { type: "Paragraf", icon: "¶" },
-    { type: "Gambar", icon: "▧" },
-    { type: "Tombol", icon: "▣" },
-    { type: "Aktivitas", icon: "✦" },
-    { type: "Video", icon: "▶" },
-    { type: "Suara", icon: "♫" },
+  const components: Array<{ type: CanvasBlock["type"]; icon: ReactNode }> = [
+    { type: "Judul", icon: <Type /> },
+    { type: "Paragraf", icon: <AlignLeft /> },
+    { type: "Gambar", icon: <ImageIcon /> },
+    { type: "Video", icon: <Video /> },
+    { type: "Suara", icon: <Music2 /> },
   ];
+  if (previewOpen) return (
+    <main className="standalone-flipbook-reader" aria-label="Pratinjau flipbook">
+      <header><strong>{book.title}</strong><button type="button" className="button quiet" onClick={() => { setPreviewOpen(false); setPreviewFullscreen(false); }}>Keluar</button></header>
+      <section className="standalone-flipbook-stage">
+        <HTMLFlipBook ref={previewFlipRef} width={previewPageWidth} height={previewPageHeight} size="stretch" minWidth={260} maxWidth={previewPageWidth} minHeight={368} maxHeight={previewPageHeight} showCover drawShadow flippingTime={800} usePortrait className="editor-preview-flipbook" startPage={previewIndex} showPageCorners={false} disableFlipByClick={false} clickEventForward={false} mobileScrollSupport={false} onInit={() => { const cover = previewFlipRef.current?.pageFlip().getPageCollection().getPage(0) as { setDensity: (density: "soft") => void } | undefined; cover?.setDensity("soft"); }} onFlip={(event: { data: number }) => setPreviewIndex(event.data)}>
+          {previewBookPages.map((page) => renderPreviewCanvas(page, pages.indexOf(page)))}
+        </HTMLFlipBook>
+      </section>
+      <footer><button className="button quiet" type="button" disabled={previewIndex === 0} onClick={() => previewFlipRef.current?.pageFlip().flipPrev()}>Sebelumnya</button><button className="button primary" type="button" disabled={previewIndex === previewBookPages.length - 1} onClick={() => previewFlipRef.current?.pageFlip().flipNext()}>Berikutnya</button></footer>
+    </main>
+  );
   return (
     <section className="editor interactive-editor">
       <div className="editor-grid">
@@ -4851,34 +6107,11 @@ function Editor({ book }: { book: MockBook }) {
                   setTitle(pages[index].label);
                 }}
               >
-                ←
+                <ChevronLeft aria-hidden="true" />
               </button>
-              <label className="page-number-field">
-                <span className="sr-only">Nomor halaman</span>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  min="1"
-                  max={pages.length}
-                  value={pageNumberInput}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setPageNumberInput(value);
-                    if (value === "") return;
-                    const index = Math.max(
-                      0,
-                      Math.min(pages.length - 1, Number(value) - 1),
-                    );
-                    setSelectedIndex(index);
-                    setTitle(pages[index].label);
-                  }}
-                  onBlur={() => {
-                    if (pageNumberInput === "")
-                      setPageNumberInput(String(selectedIndex + 1));
-                  }}
-                />
-                <strong>/ {pages.length}</strong>
-              </label>
+              <div className="page-number-field" aria-live="polite">
+                <strong>{selectedIndex + 1}</strong>
+              </div>
               <button
                 type="button"
                 aria-label="Halaman berikutnya"
@@ -4889,7 +6122,7 @@ function Editor({ book }: { book: MockBook }) {
                   setTitle(pages[index].label);
                 }}
               >
-                →
+                <ChevronRight aria-hidden="true" />
               </button>
             </div>
           </section>
@@ -4900,11 +6133,11 @@ function Editor({ book }: { book: MockBook }) {
                 <button
                   type="button"
                   key={item.type}
-                  onClick={() => addComponent(item.type)}
+                  onClick={() => item.type === "Gambar" ? imageInputRef.current?.click() : addComponent(item.type)}
                 >
                   <span>{item.icon}</span>
                   <strong>{item.type}</strong>
-                  <small>Tambahkan ke kanvas</small>
+                  <small>{item.type === "Gambar" ? "Pilih file gambar" : "Tambahkan ke kanvas"}</small>
                 </button>
               ))}
             </div>
@@ -4913,66 +6146,93 @@ function Editor({ book }: { book: MockBook }) {
         <section className="canvas-wrap">
           <div className="canvas-header">
             <span>
-              Halaman {String(selectedIndex + 1).padStart(2, "0")} ·{" "}
-              {selected.label}
+              Halaman {selectedIndex + 1} dari {pages.length}
             </span>
-            <span>A4 · 210 × 297 mm</span>
+            <span>{nativePdfBlock ? "PDF asli" : "A4 · 210 × 297 mm"}</span>
           </div>
-          <article className="canvas" aria-label="Kanvas A4">
-            <div
-              className="canvas-page-header"
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(event) => {
-                setCanvasHeader(
-                  event.currentTarget.textContent || "HEADER MODUL",
-                );
-                setSaved(false);
-              }}
-            >
-              {canvasHeader}
-            </div>
-            <p className="eyebrow">
-              BAGIAN {String(selectedIndex + 1).padStart(2, "0")}
-            </p>
-            <h2
-              contentEditable
-              suppressContentEditableWarning
-              onBlur={(event) => {
-                setTitle(event.currentTarget.textContent || "Halaman baru");
-                setSaved(false);
-              }}
-            >
-              {title}
-            </h2>
-            <p className="canvas-intro">{selected.body}</p>
+          <article
+            className={`canvas${nativePdfBlock ? " native-pdf-canvas" : ""}`}
+            aria-label={nativePdfBlock ? "Halaman PDF asli" : "Kanvas A4"}
+            style={nativePdfBlock ? { aspectRatio: `${nativePdfBlock.pdfAspectRatio ?? (210 / 297)}` } : undefined}
+          >
+            {!isBlankCanvas && !isFullPage && (
+              <>
+                <div
+                  className="canvas-page-header"
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(event) => {
+                    setCanvasHeader(
+                      event.currentTarget.textContent || "HEADER MODUL",
+                    );
+                    setSaved(false);
+                  }}
+                >
+                  {canvasHeader}
+                </div>
+                <p className="eyebrow">
+                  BAGIAN {String(selectedIndex + 1).padStart(2, "0")}
+                </p>
+                <h2
+                  contentEditable
+                  suppressContentEditableWarning
+                  onBlur={(event) => {
+                    const nextTitle = event.currentTarget.textContent || "Halaman baru";
+                    setTitle(nextTitle);
+                    setPages((current) => current.map((page, index) => index === selectedIndex ? { ...page, label: nextTitle } : page));
+                    setSaved(false);
+                  }}
+                >
+                  {title}
+                </h2>
+                <p className="canvas-intro">{selected.body}</p>
+              </>
+            )}
             {selectedBlocks.map((block) => (
               <section
-                className={`canvas-block type-${block.type.toLowerCase()}`}
-                style={{ left: block.x, top: block.y }}
+                className={`canvas-block type-${block.type.toLowerCase()}${block.fullPage ? " is-full-page" : ""}${block.preserveAspectRatio ? " preserve-aspect" : ""}${selectedBlockId === block.id ? " is-selected" : ""}`}
+                style={{ left: block.x, top: block.y, width: isTextBlock(block) ? block.width ?? 320 : (block.showQr || block.type === "Gambar") ? block.width ?? 260 : undefined, height: !block.fullPage && (block.showQr || block.type === "Gambar") ? block.height ?? (block.showQr ? 260 : 220) : undefined, minHeight: isTextBlock(block) ? block.height ?? (block.type === "Judul" ? 72 : 112) : undefined }}
                 key={block.id}
+                onMouseDown={() => setSelectedBlockId(block.id)}
               >
-                <button
-                  className="canvas-drag-handle"
-                  type="button"
-                  aria-label={`Pindahkan ${block.type}`}
-                  title="Geser komponen"
-                  onPointerDown={(event) => moveBlock(event, block.id)}
-                >
-                  ⠿
-                </button>
-                <button
-                  className="canvas-delete-control"
-                  type="button"
-                  aria-label={`Hapus ${block.type}`}
-                  title="Hapus komponen"
-                  onClick={() => removeBlock(block.id)}
-                >
-                  ×
-                </button>
+                {!block.fullPage && <>
+                  <button
+                    className="canvas-drag-handle"
+                    type="button"
+                    aria-label={`Pindahkan ${block.type}`}
+                    title="Geser komponen"
+                    onPointerDown={(event) => moveBlock(event, block.id)}
+                  >
+                    ⠿
+                  </button>
+                  <button
+                    className="canvas-delete-control"
+                    type="button"
+                    aria-label={`Hapus ${block.type}`}
+                    title="Hapus komponen"
+                    onClick={() => removeBlock(block.id)}
+                  >
+                    ×
+                  </button>
+                  {(isTextBlock(block) || block.showQr || block.type === "Gambar") && selectedBlockId === block.id && (
+                    <button
+                      className="canvas-resize-handle"
+                      type="button"
+                      aria-label={`Ubah ukuran ${block.showQr ? "QR Code" : `kotak ${block.type}`}`}
+                      title={block.showQr ? "Tarik untuk memperbesar atau memperkecil QR Code" : "Tarik untuk mengubah ukuran kotak"}
+                      onPointerDown={(event) => resizeBlock(event, block.id)}
+                    >
+                      ↘
+                    </button>
+                  )}
+                </>}
                 {block.type === "Gambar" ? (
                   <div className="canvas-image-placeholder">
-                    {block.imageSrc ? (
+                    {block.pdfKey ? (
+                      editorPdfUrls[block.pdfKey] ? (
+                        <iframe className="embedded-pdf-page" src={`${editorPdfUrls[block.pdfKey]}#page=${block.pdfPage ?? 1}&zoom=page-width&toolbar=0&navpanes=0&scrollbar=0`} title={block.text} />
+                      ) : <small>Memuat PDF…</small>
+                    ) : block.imageSrc ? (
                       <img src={block.imageSrc} alt={block.text} />
                     ) : (
                       <>
@@ -4994,49 +6254,47 @@ function Editor({ book }: { book: MockBook }) {
                   </fieldset>
                 ) : block.type === "Video" ? (
                   <div className="canvas-media">
-                    <input
+                    {!block.showQr && <input
+                      id={`video-url-${block.id}`}
                       value={block.url || ""}
                       onChange={(event) =>
                         updateBlockUrl(block.id, event.target.value)
                       }
                       placeholder="Tempel link YouTube"
-                    />
-                    {youtubeEmbedUrl(block.url) ? (
+                    />}
+                    {!block.showQr && <button type="button" className="button quiet" onClick={() => { setVideoTargetBlockId(block.id); setShowVideoLibrary(true); }}>Pilih video dari Koleksi QR Code</button>}
+                    {block.showQr && block.url ? (
+                      <div className="video-qr-preview"><img src={`https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(block.url)}`} alt={`QR Code untuk ${block.text}`} /></div>
+                    ) : youtubeEmbedUrl(block.url) ? (
                       <iframe
                         src={youtubeEmbedUrl(block.url)}
                         title={block.text}
                         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
                         allowFullScreen
                       />
+                    ) : block.url ? (
+                      <video controls playsInline src={block.url}>Browser tidak mendukung video.</video>
                     ) : (
-                      <small>
-                        Tempel link YouTube untuk menampilkan video.
-                      </small>
+                      <small>Tempel tautan YouTube atau pilih video yang telah dibuat di halaman QR Code.</small>
                     )}
                   </div>
                 ) : block.type === "Suara" ? (
                   <div className="canvas-media">
-                    <input
-                      value={block.url || ""}
-                      onChange={(event) =>
-                        updateBlockUrl(block.id, event.target.value)
-                      }
-                      placeholder="Tempel URL file audio (.mp3, .wav)"
-                    />
-                    {block.url ? (
-                      <audio controls src={block.url}>
-                        Browser tidak mendukung audio.
-                      </audio>
-                    ) : (
-                      <small>
-                        Masukkan URL audio untuk menampilkan pemutar.
-                      </small>
-                    )}
+                    {block.showQr && block.url ? <div className="video-qr-preview"><img src={`https://quickchart.io/qr?size=360&margin=2&text=${encodeURIComponent(block.url)}`} alt={`QR Code untuk ${block.text}`} /></div> : <button type="button" className="button quiet" onClick={() => { setVideoTargetBlockId(block.id); setShowAudioLibrary(true); }}>Pilih audio dari Koleksi QR Code</button>}
                   </div>
                 ) : (
                   <div
                     contentEditable
                     suppressContentEditableWarning
+                    style={isTextBlock(block) ? {
+                      fontSize: `${block.fontSize ?? (block.type === "Judul" ? 28 : 16)}px`,
+                      fontFamily: block.fontFamily ?? "Arial",
+                      fontWeight: block.fontWeight ?? (block.type === "Judul" ? "bold" : "normal"),
+                      fontStyle: block.fontStyle ?? "normal",
+                      textDecoration: block.textDecoration ?? "none",
+                      textAlign: block.textAlign ?? "left",
+                      color: block.fontColor ?? "#315e62",
+                    } : undefined}
                     onBlur={(event) =>
                       updateBlock(
                         block.id,
@@ -5049,66 +6307,42 @@ function Editor({ book }: { book: MockBook }) {
                 )}
               </section>
             ))}
-            <div className="canvas-page-footer">
-              <span
-                contentEditable
-                suppressContentEditableWarning
-                onBlur={(event) => {
-                  setCanvasFooter(
-                    event.currentTarget.textContent || "Flipbook e-modul",
-                  );
-                  setSaved(false);
-                }}
-              >
-                {canvasFooter}
-              </span>
-              <b>{selectedIndex + 1}</b>
-            </div>
           </article>
         </section>
         <aside className="inspector">
-          <h2>Properti halaman</h2>
-          <label>
-            Header kanvas
-            <input
-              value={canvasHeader}
-              onChange={(event) => {
-                setCanvasHeader(event.target.value);
-                setSaved(false);
-              }}
-            />
-          </label>
-          <label>
-            Footer kanvas
-            <input
-              value={canvasFooter}
-              onChange={(event) => {
-                setCanvasFooter(event.target.value);
-                setSaved(false);
-              }}
-            />
-          </label>
-          <label>
-            Judul halaman
-            <input
-              value={title}
-              onChange={(event) => {
-                setTitle(event.target.value || "Halaman baru");
-                setSaved(false);
-              }}
-            />
-          </label>
-          <label>
-            Ukuran kanvas
-            <select value="A4" disabled>
-              <option>A4 · 210 × 297 mm</option>
-            </select>
-          </label>
+          <h2>Properti</h2>
+          <div className="page-actions">
+            <div className="history-actions">
+              <button
+                className="button quiet"
+                type="button"
+                disabled={!historyControls.canUndo}
+                onClick={() => restoreHistory(-1)}
+              >
+                ↶ Undo
+              </button>
+              <button
+                className="button quiet"
+                type="button"
+                disabled={!historyControls.canRedo}
+                onClick={() => restoreHistory(1)}
+              >
+                ↷ Redo
+              </button>
+            </div>
+            <button
+              className="button danger"
+              type="button"
+              disabled={pages.length === 0}
+              onClick={openDeleteDialog}
+            >
+              Hapus halaman
+            </button>
+          </div>
           <div className="import-panel">
-            <strong>Sisipkan dokumen</strong>
+            <strong>Sisipkan PDF</strong>
             <small>
-              Gambar menjadi satu halaman. Semua halaman PDF akan disisipkan
-              sekaligus.
+              Semua halaman PDF akan disisipkan sekaligus.
             </small>
             <label>
               Mulai pada halaman
@@ -5124,9 +6358,19 @@ function Editor({ book }: { book: MockBook }) {
               </select>
             </label>
             <input
+              ref={imageInputRef}
+              type="file"
+              accept="image/*"
+              hidden
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) void insertImportedPages(file);
+              }}
+            />
+            <input
               ref={importInputRef}
               type="file"
-              accept="image/*,application/pdf,.pdf"
+              accept="application/pdf,.pdf"
               hidden
               onChange={(event) => {
                 const file = event.target.files?.[0];
@@ -5139,26 +6383,150 @@ function Editor({ book }: { book: MockBook }) {
               disabled={importing}
               onClick={() => importInputRef.current?.click()}
             >
-              {importing ? "Mengimpor…" : "⇧ Sisipkan gambar / PDF"}
+              {importing ? "Mengimpor…" : "⇧ Sisipkan PDF"}
             </button>
           </div>
+          <button
+            className="button quiet add-page-button"
+            type="button"
+            onClick={addPage}
+          >
+            + Tambah halaman
+          </button>
+          {importError && <p className="settings-message" role="alert">{importError}</p>}
           <div className="inspector-summary">
             <strong>{selectedBlocks.length} komponen</strong>
             <span>pada halaman aktif</span>
           </div>
-          <button
-            className="button quiet"
-            type="button"
-            onClick={() => setTab("komponen")}
-          >
-            + Tambah komponen
-          </button>
+          {isTextBlock(selectedBlock) && selectedBlock && (
+            <section className="text-format-panel" aria-label="Format teks">
+              <strong>Format teks</strong>
+              <label>
+                Jenis font
+                <select
+                  value={selectedBlock.fontFamily ?? "Arial"}
+                  onChange={(event) => updateBlockStyle(selectedBlock.id, { fontFamily: event.target.value })}
+                >
+                  <option value="Arial">Arial</option>
+                  <option value="Verdana">Verdana</option>
+                  <option value="Tahoma">Tahoma</option>
+                  <option value="Trebuchet MS">Trebuchet MS</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Courier New">Courier New</option>
+                </select>
+              </label>
+              <label className="font-size-control">
+                <span>Ukuran huruf <output>{selectedBlock.fontSize ?? (selectedBlock.type === "Judul" ? 28 : 16)} px</output></span>
+                <div>
+                  <input type="range" min="10" max="72" value={selectedBlock.fontSize ?? (selectedBlock.type === "Judul" ? 28 : 16)} onChange={(event) => updateBlockStyle(selectedBlock.id, { fontSize: Number(event.target.value) })} />
+                </div>
+              </label>
+              <label className="font-color-control">
+                <span>Warna font</span>
+                <input
+                  type="color"
+                  value={selectedBlock.fontColor ?? "#315e62"}
+                  onChange={(event) => updateBlockStyle(selectedBlock.id, { fontColor: event.target.value })}
+                  aria-label="Pilih warna font"
+                />
+              </label>
+              <span className="format-group-label">Gaya</span>
+              <div className="text-style-buttons" aria-label="Gaya teks">
+                <button type="button" className={(selectedBlock.fontWeight ?? (selectedBlock.type === "Judul" ? "bold" : "normal")) === "bold" ? "is-active" : ""} aria-pressed={(selectedBlock.fontWeight ?? (selectedBlock.type === "Judul" ? "bold" : "normal")) === "bold"} onClick={() => updateBlockStyle(selectedBlock.id, { fontWeight: (selectedBlock.fontWeight ?? (selectedBlock.type === "Judul" ? "bold" : "normal")) === "bold" ? "normal" : "bold" })}><b>B</b><span className="sr-only">Tebal</span></button>
+                <button type="button" className={selectedBlock.fontStyle === "italic" ? "is-active" : ""} aria-pressed={selectedBlock.fontStyle === "italic"} onClick={() => updateBlockStyle(selectedBlock.id, { fontStyle: selectedBlock.fontStyle === "italic" ? "normal" : "italic" })}><i>I</i><span className="sr-only">Miring</span></button>
+                <button type="button" className={selectedBlock.textDecoration === "underline" ? "is-active" : ""} aria-pressed={selectedBlock.textDecoration === "underline"} onClick={() => updateBlockStyle(selectedBlock.id, { textDecoration: selectedBlock.textDecoration === "underline" ? "none" : "underline" })}><u>U</u><span className="sr-only">Garis bawah</span></button>
+              </div>
+              <span className="format-group-label">Perataan</span>
+              <div className="text-align-buttons" role="group" aria-label="Perataan teks">
+                <button type="button" className={(selectedBlock.textAlign ?? "left") === "left" ? "is-active" : ""} aria-pressed={(selectedBlock.textAlign ?? "left") === "left"} onClick={() => updateBlockStyle(selectedBlock.id, { textAlign: "left" })} title="Rata kiri"><AlignLeft aria-hidden="true" /><span className="sr-only">Rata kiri</span></button>
+                <button type="button" className={selectedBlock.textAlign === "center" ? "is-active" : ""} aria-pressed={selectedBlock.textAlign === "center"} onClick={() => updateBlockStyle(selectedBlock.id, { textAlign: "center" })} title="Rata tengah"><AlignCenter aria-hidden="true" /><span className="sr-only">Rata tengah</span></button>
+                <button type="button" className={selectedBlock.textAlign === "right" ? "is-active" : ""} aria-pressed={selectedBlock.textAlign === "right"} onClick={() => updateBlockStyle(selectedBlock.id, { textAlign: "right" })} title="Rata kanan"><AlignRight aria-hidden="true" /><span className="sr-only">Rata kanan</span></button>
+                <button type="button" className={selectedBlock.textAlign === "justify" ? "is-active" : ""} aria-pressed={selectedBlock.textAlign === "justify"} onClick={() => updateBlockStyle(selectedBlock.id, { textAlign: "justify" })} title="Justify"><AlignJustify aria-hidden="true" /><span className="sr-only">Justify</span></button>
+              </div>
+            </section>
+          )}
           <p className="helper">
             Tarik ikon ⠿ pada setiap komponen untuk memindahkannya. Klik teks
             untuk mengedit.
           </p>
         </aside>
       </div>
+      {deleteDialogOpen && (
+        <div className="modal-backdrop page-delete-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setDeleteDialogOpen(false); }}>
+          <section className="confirm-modal page-delete-dialog" role="dialog" aria-modal="true" aria-labelledby="page-delete-title">
+            <p className="eyebrow">HAPUS HALAMAN</p>
+            {confirmAllDelete ? <><h2 id="page-delete-title">Hapus semua halaman?</h2><p>Sebanyak {pages.length} halaman akan dihapus. Tindakan ini tidak dapat dikembalikan.</p><div className="confirm-actions"><button className="button quiet" onClick={() => { setPagesToDelete(selected ? [selected.id] : []); setPageSelection(String(selectedIndex + 1)); setConfirmAllDelete(false); }}>Kembali</button><button className="danger-solid" onClick={deletePages}>Ya, hapus semua</button></div></> : <><h2 id="page-delete-title">Pilih halaman yang akan dihapus</h2><p>Halaman yang sedang tampil telah dipilih secara otomatis.</p><label className="page-range-input">Nomor halaman atau rentang<input value={pageSelection} onChange={(event) => selectPagesFromText(event.target.value)} placeholder="Contoh: 1, 4, 8-12" /></label><div className="confirm-actions"><button className="button quiet" onClick={() => setDeleteDialogOpen(false)}>Batal</button><button className="button quiet" onClick={() => { setPagesToDelete(pages.map((page) => page.id)); setConfirmAllDelete(true); }}>Semua halaman</button><button className="danger-solid" disabled={!pagesToDelete.length} onClick={deletePages}>{pageSelection === String(selectedIndex + 1) ? "Hapus halaman aktif" : `Hapus ${pagesToDelete.length} halaman`}</button></div></>}
+          </section>
+        </div>
+      )}
+      {previewOpen && (
+        <div className="modal-backdrop flipbook-preview-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPreviewOpen(false); }}>
+          <section className={`flipbook-preview-modal${previewFullscreen ? " is-fullscreen" : ""}`} role="dialog" aria-modal="true" aria-labelledby="flipbook-preview-title">
+            <header>
+              <div><p className="eyebrow">PRATINJAU FLIPBOOK</p><h2 id="flipbook-preview-title">{book.title}</h2></div>
+              <div className="preview-header-actions"><button type="button" className="button quiet preview-fullscreen" onClick={() => { setPreviewOpen(false); setPreviewFullscreen(false); }}>Keluar</button></div>
+            </header>
+            <div className="flipbook-reader-stage">
+            <HTMLFlipBook ref={previewFlipRef} width={previewPageWidth} height={previewPageHeight} size="stretch" minWidth={260} maxWidth={previewFullscreen ? previewPageWidth : 560} minHeight={368} maxHeight={previewFullscreen ? previewPageHeight : 760} showCover drawShadow flippingTime={800} usePortrait className="editor-preview-flipbook" startPage={previewIndex} showPageCorners={false} disableFlipByClick={false} clickEventForward={false} mobileScrollSupport={false} onInit={() => { const cover = previewFlipRef.current?.pageFlip().getPageCollection().getPage(0) as { setDensity: (density: "soft") => void } | undefined; cover?.setDensity("soft"); }} onFlip={(event: { data: number }) => setPreviewIndex(event.data)}>
+              {previewBookPages.map((page) => renderPreviewCanvas(page, pages.indexOf(page)))}
+            </HTMLFlipBook>
+            </div>
+            <footer>
+              <button className="button quiet" type="button" disabled={previewIndex === 0} onClick={() => previewFlipRef.current?.pageFlip().flipPrev()}>Sebelumnya</button>
+              <button className="button primary" type="button" disabled={previewIndex === pages.length - 1} onClick={() => previewFlipRef.current?.pageFlip().flipNext()}>Berikutnya</button>
+            </footer>
+          </section>
+        </div>
+      )}
+      {showYoutubeLinkModal && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPendingMedia(); }}>
+          <section className="confirm-modal video-source-modal" role="dialog" aria-modal="true" aria-labelledby="youtube-link-title">
+            <p className="eyebrow">VIDEO YOUTUBE</p>
+            <h2 id="youtube-link-title">Tempel link YouTube</h2>
+            <p>Gunakan tautan video YouTube atau YouTube Shorts yang ingin disisipkan.</p>
+            <label className="youtube-link-field">Tautan YouTube<input autoFocus type="url" value={youtubeLink} onChange={(event) => { setYoutubeLink(event.target.value); setYoutubeLinkError(""); }} placeholder="https://www.youtube.com/watch?v=..." /></label>
+            {youtubeLinkError && <p className="settings-message" role="alert">{youtubeLinkError}</p>}
+            <div className="confirm-actions"><button type="button" className="button quiet" onClick={cancelPendingMedia}>Batal</button><button type="button" className="button primary" onClick={insertYoutubeVideo}>Sisipkan video</button></div>
+          </section>
+        </div>
+      )}
+      {showVideoSourcePicker && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPendingMedia(); }}>
+          <section className="confirm-modal video-source-modal" role="dialog" aria-modal="true" aria-labelledby="video-source-title">
+            <p className="eyebrow">TAMBAHKAN VIDEO</p>
+            <h2 id="video-source-title">Pilih sumber video</h2>
+            <p>Gunakan tautan YouTube atau pilih video yang QR Code-nya telah dibuat.</p>
+            <div className="video-source-actions">
+              <button type="button" onClick={() => { setShowVideoSourcePicker(false); setYoutubeLink(""); setYoutubeLinkError(""); setShowYoutubeLinkModal(true); }}><Video aria-hidden="true" /><strong>Tempel link YouTube</strong><small>Masukkan tautan video YouTube.</small></button>
+              <button type="button" onClick={() => { setShowVideoSourcePicker(false); setShowVideoLibrary(true); }}><QrCode aria-hidden="true" /><strong>Ambil dari Koleksi QR Code</strong><small>Pilih video yang telah ditambahkan.</small></button>
+            </div>
+            <div className="confirm-actions"><button type="button" className="button quiet" onClick={cancelPendingMedia}>Batal</button></div>
+          </section>
+        </div>
+      )}
+      {showAudioLibrary && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPendingMedia(); }}>
+          <section className="confirm-modal video-library-modal" role="dialog" aria-modal="true" aria-labelledby="audio-library-title">
+            <p className="eyebrow">KOLEKSI QR CODE</p>
+            <h2 id="audio-library-title">Pilih audio pembelajaran</h2>
+            <p>Pilih audio yang sebelumnya ditambahkan dari halaman QR Code.</p>
+            {availableAudios.length ? <div className="audio-library-list">{availableAudios.map((audio) => <article key={audio.id} className="audio-library-row"><span className="audio-library-icon"><Music2 aria-hidden="true" /></span><div><strong>{audio.title}</strong><small>Audio dari Koleksi QR Code</small></div><button type="button" className="button primary" onClick={() => { if (videoTargetBlockId) setVideoFromQrCollection(videoTargetBlockId, audio.public_url); setShowAudioLibrary(false); setVideoTargetBlockId(null); }}>Gunakan QR Code</button></article>)}</div> : <EmptyState title="Koleksi audio kosong">Tambahkan audio terlebih dahulu melalui halaman QR Code.</EmptyState>}
+            <div className="confirm-actions"><button type="button" className="button quiet" onClick={cancelPendingMedia}>Tutup</button></div>
+          </section>
+        </div>
+      )}
+      {showVideoLibrary && (
+        <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) cancelPendingMedia(); }}>
+          <section className="confirm-modal video-library-modal" role="dialog" aria-modal="true" aria-labelledby="video-library-title">
+            <p className="eyebrow">KOLEKSI QR CODE</p>
+            <h2 id="video-library-title">Pilih video pembelajaran</h2>
+            <p>Pilih video yang sebelumnya ditambahkan dari halaman QR Code.</p>
+            {availableVideos.length ? <div className="video-library-grid">{availableVideos.map((video) => <article key={video.id} className="video-library-card"><video preload="metadata" muted src={`${video.public_url}#t=0.1`} /><div><strong>{video.title}</strong><small>Video dari Koleksi QR Code</small></div><button type="button" className="button primary" onClick={() => { if (videoTargetBlockId) setVideoFromQrCollection(videoTargetBlockId, video.public_url); setShowVideoLibrary(false); setVideoTargetBlockId(null); }}>Gunakan QR Code</button></article>)}</div> : <EmptyState title="Koleksi video kosong">Tambahkan video terlebih dahulu melalui halaman QR Code.</EmptyState>}
+            <div className="confirm-actions"><button type="button" className="button quiet" onClick={cancelPendingMedia}>Tutup</button></div>
+          </section>
+        </div>
+      )}
     </section>
   );
 }

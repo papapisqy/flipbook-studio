@@ -222,6 +222,51 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .admin-dashboard-page .status.neutral { background: #dceef5 !important; color: #38616f !important; }
 .admin-dashboard-page .status.draft { background: #fff0bd !important; color: #795b19 !important; }
 
+/* Collection: compact, book-first action layout. */
+.admin-dashboard-page .collection-panel { padding: 1.25rem 1.45rem !important; }
+.admin-dashboard-page .collection-panel .panel-heading { margin-bottom: .85rem; }
+.admin-dashboard-page .collection-panel .book-row { align-items: center; gap: 1rem; margin-top: 0; padding: 1rem 0 0; }
+.admin-dashboard-page .collection-panel .book-thumb { border: 1px solid #d3e6e6; border-radius: 10px; flex: 0 0 auto; height: 72px; overflow: hidden; width: 56px; }
+.admin-dashboard-page .collection-panel .book-details { display: grid; flex: 1 1 220px; gap: .28rem; min-width: 0; }
+.admin-dashboard-page .collection-panel .book-details strong { font-size: 1.35rem; line-height: 1.1; }
+.admin-dashboard-page .collection-panel .book-details span { font-size: .9rem; margin: 0; }
+.admin-dashboard-page .collection-panel .book-actions { align-items: center; display: flex; flex: 0 1 auto; gap: .7rem; justify-content: flex-end; }
+.admin-dashboard-page .collection-panel .book-primary-actions { display: flex; flex-wrap: wrap; gap: .5rem; justify-content: flex-end; }
+.admin-dashboard-page .collection-panel .book-actions .status { margin-right: .1rem; white-space: nowrap; }
+.admin-dashboard-page .collection-panel .book-actions .button { min-height: 38px; white-space: nowrap; }
+.admin-dashboard-page .collection-panel .book-actions .button.primary { background: #43878b !important; border-color: #43878b !important; color: #fff !important; box-shadow: 0 5px 12px rgba(67,135,139,.18); }
+.admin-dashboard-page .collection-panel .book-actions .danger-button { color: #a85143 !important; }
+@media (max-width: 1050px) {
+  .admin-dashboard-page .collection-panel .book-row { align-items: flex-start; flex-wrap: wrap; }
+  .admin-dashboard-page .collection-panel .book-actions { flex: 1 1 100%; justify-content: flex-start; margin-left: 72px; }
+  .admin-dashboard-page .collection-panel .book-primary-actions { justify-content: flex-start; }
+}
+@media (max-width: 640px) {
+  .admin-dashboard-page .collection-panel { padding: 1rem !important; }
+  .admin-dashboard-page .collection-panel .book-thumb { height: 62px; width: 48px; }
+  .admin-dashboard-page .collection-panel .book-details strong { font-size: 1.15rem; }
+  .admin-dashboard-page .collection-panel .book-actions { align-items: flex-start; flex-direction: column; margin-left: 0; }
+  .admin-dashboard-page .collection-panel .book-primary-actions { width: 100%; }
+  .admin-dashboard-page .collection-panel .book-primary-actions .button { flex: 1 1 auto; text-align: center; }
+}
+.share-modal { max-width: 430px !important; text-align: center; }
+.share-modal-qr { background: #fff; border: 1px solid #d7e7e7; border-radius: 12px; display: block; height: 190px; margin: 1rem auto; padding: .5rem; width: 190px; }
+.share-link-field { display: grid; gap: .35rem; margin: 1rem 0; text-align: left; }
+.share-link-field span { color: #577174; font-size: .82rem; font-weight: 700; }
+.share-link-field input { background: #f8fbfb; border: 1px solid #d3e6e6; border-radius: 8px; color: #315e62; padding: .65rem .75rem; width: 100%; }
+.qr-display-modal { max-width: min(680px, calc(100vw - 2rem)) !important; padding: 2rem 2.25rem !important; }
+.qr-display-modal .share-modal-qr { display: grid; height: 344px; place-items: center; width: 344px; }
+.qr-display-modal .share-modal-qr img { display: block; height: 320px; max-height: 100%; max-width: 100%; width: 320px; }
+.qr-display-modal .share-link-field { margin: 1.25rem 0 0; }
+.qr-display-modal .share-link-field input { overflow: hidden; text-overflow: ellipsis; }
+.qr-display-modal .confirm-actions { flex-wrap: wrap; justify-content: center; }
+@media (max-width: 520px) {
+  .qr-display-modal { max-height: calc(100vh - 1.5rem); overflow: auto; padding: 1.25rem !important; }
+  .qr-display-modal .share-modal-qr { height: min(72vw, 300px); width: min(72vw, 300px); }
+  .qr-display-modal .share-modal-qr img { height: 100%; width: 100%; }
+  .qr-display-modal .confirm-actions { display: grid; grid-template-columns: 1fr; }
+}
+
 @media (max-width: 900px) {
   .admin-dashboard-page .admin-nav { position: sticky; top: 0; z-index: 30; height: auto; background: #24495a !important; box-shadow: 0 3px 10px rgba(27,53,70,.18); }
   .admin-dashboard-page .workspace { padding: 1.25rem 1rem !important; }
@@ -250,7 +295,54 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   box-shadow: none !important;
 }
 
+.admin-dashboard-page .editor-module-settings {
+  display: flex;
+  align-items: end;
+  gap: 1rem;
+  margin: -1rem 0 1rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid #cbdedc;
+  border-radius: 12px;
+  background: #fffdfa;
+}
+
+.admin-dashboard-page .editor-module-settings label {
+  display: grid;
+  flex: 1;
+  max-width: 36rem;
+  gap: .45rem;
+  color: #2b6267;
+  font-size: .9rem;
+  font-weight: 800;
+}
+
+.admin-dashboard-page .editor-module-settings input {
+  width: 100%;
+  border: 1px solid #b9dddd;
+  border-radius: 9px;
+  background: #fff;
+  color: #2b4548;
+  padding: .7rem .8rem;
+}
+
+.admin-dashboard-page .editor-module-settings .editor-page-save {
+  position: static;
+  flex: 0 0 auto;
+  min-height: 44px;
+  margin: 0 !important;
+  white-space: nowrap;
+}
+
 @media (max-width: 760px) {
+  .admin-dashboard-page .editor-module-settings {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .admin-dashboard-page .editor-module-settings .editor-page-save {
+    width: 100%;
+  }
+
   .admin-dashboard-page .editor-page-save-wrap {
     height: auto;
     display: flex;
@@ -315,13 +407,17 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 
 .admin-dashboard-page .interactive-editor .page-stepper button {
   height: 42px;
-  border: 1px solid #b9dddd;
-  border-radius: 10px;
-  background: #fffdfa;
-  color: #28666c;
-  font-size: 1.2rem;
+  border: 1px solid #8fc6c5;
+  border-radius: 50%;
+  background: #e5f4f3;
+  color: #257276;
+  font-size: 1.35rem;
   font-weight: 800;
+  line-height: 1;
+  transition: transform .16s ease, background .16s ease, box-shadow .16s ease;
 }
+
+.admin-dashboard-page .interactive-editor .page-stepper button:hover:not(:disabled) { background: #5aa4a5; color: #fff; box-shadow: 0 5px 12px rgba(43, 119, 125, .22); transform: translateY(-1px); }
 
 .admin-dashboard-page .interactive-editor .page-stepper button:disabled {
   cursor: not-allowed;
@@ -377,6 +473,53 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   background: #fffdfa;
   transform: translateX(-.3rem);
 }
+
+.admin-dashboard-page .interactive-editor .page-actions {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: .55rem;
+  margin-top: .7rem;
+}
+
+.admin-dashboard-page .interactive-editor .history-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .55rem;
+}
+
+.admin-dashboard-page .interactive-editor .history-actions .button {
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.admin-dashboard-page .interactive-editor .page-actions .button {
+  min-height: 40px;
+  padding: .55rem .65rem;
+}
+
+.admin-dashboard-page .interactive-editor .page-actions .danger {
+  border: 1px solid #d98b7c;
+  border-radius: 9px;
+  background: #fff3f0;
+  color: #9b3f31;
+}
+
+.admin-dashboard-page .interactive-editor .page-actions .danger:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.page-delete-dialog { width: min(520px, 100%); }
+.page-delete-dialog h2 { margin: .2rem 0 .5rem; }
+.page-delete-dialog > p:not(.eyebrow) { margin: 0; }
+.delete-all-pages, .delete-page-list label { display: flex; align-items: center; gap: .65rem; }
+.delete-all-pages { margin: 1.1rem 0 .7rem; font-weight: 800; }
+.delete-page-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: .55rem; max-height: 220px; overflow: auto; padding: .2rem; }
+.delete-page-list label { border: 1px solid #cbdedc; border-radius: 8px; background: #fffdfa; padding: .6rem; color: #2b6267; }
+.delete-page-list input, .delete-all-pages input { width: 1.1rem; height: 1.1rem; accent-color: #3b777d; }
+.page-range-input { display: grid; gap: .45rem; margin-top: 1rem; color: #2b6267; font-weight: 800; }
+.page-range-input input { border: 1px solid #b9dddd; border-radius: 8px; padding: .7rem; }
+.delete-page-shortcuts { display: flex; gap: .6rem; margin-top: .7rem; }
 
 .admin-dashboard-page .interactive-editor .page-number-field input {
   width: 1.6ch;
@@ -446,7 +589,7 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   display: none !important;
 }
 
-/* Editor interaktif — menyatu dengan tema kertas dan palet Flipbook Studio. */
+/* Editor interaktif — menyatu dengan tema kertas dan palet E-Modul Flipbook. */
 .admin-dashboard-page .interactive-editor { overflow: hidden; border: 1px solid #d8e7e5; border-radius: 18px; background: #f7fcfb; color: #442a22; box-shadow: 0 14px 30px rgba(77, 103, 100, .12); }
 .admin-dashboard-page .interactive-editor .editor-bar { position: sticky; top: 0; z-index: 5; border-bottom: 1px solid #cfe1df; background: linear-gradient(120deg, #eff9f8, #fffaf5); color: #442a22; padding: 1rem 1.35rem; }
 .admin-dashboard-page .interactive-editor .editor-bar h1 { color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 2rem; }
@@ -480,6 +623,50 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .admin-dashboard-page .interactive-editor .canvas h2 { color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: clamp(2rem, 4vw, 3rem); outline: none; }
 .admin-dashboard-page .interactive-editor .canvas-intro { color: #705e55; line-height: 1.65; }
 .admin-dashboard-page .interactive-editor .canvas-block { position: absolute; z-index: 1; width: min(78%, 360px); margin: 0; padding: 1.05rem .75rem .75rem; border: 1px dashed #b5d6d2; border-radius: 10px; background: rgba(255, 253, 250, .92); outline: none; box-shadow: 0 3px 9px rgba(72, 107, 105, .08); }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page { inset: 0 !important; width: 100%; height: 100%; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder,
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder img { width: 100%; height: 100%; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder { min-height: 0; border-radius: 0; background: transparent; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder img { display: block; max-height: none; border-radius: 0; object-fit: fill; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder { display: grid; place-items: center; overflow: hidden; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder img { width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page.preserve-aspect .canvas-image-placeholder img { object-fit: contain; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page.preserve-aspect .canvas-image-placeholder { display: grid; place-items: center; overflow: hidden; }
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page.preserve-aspect .canvas-image-placeholder img { width: auto; height: auto; max-width: 100%; max-height: 100%; }
+/* An absolutely positioned full-page block must be sized by its four insets.
+   Combining inset: 0 with width/height: 100% makes the final right/bottom
+   constraints over-specified, which can push imported images outside the page. */
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page {
+  /* Give descendants a definite canvas-sized containing block. This lets
+     max-height resolve to the page height instead of the image's own height. */
+  inset: auto !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+  max-height: 100%;
+}
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page .canvas-image-placeholder img,
+.admin-dashboard-page .interactive-editor .canvas-block.is-full-page.preserve-aspect .canvas-image-placeholder img {
+  /* Keep the source ratio. The first dimension that reaches the canvas
+     boundary determines the rendered size; the other remains proportional. */
+  width: auto !important;
+  height: 100% !important;
+  max-width: 100%;
+  max-height: 100%;
+  box-sizing: border-box;
+  object-fit: contain;
+}
 .admin-dashboard-page .interactive-editor .canvas-block:has(.canvas-drag-handle:hover),
 .admin-dashboard-page .interactive-editor .canvas-block:hover { border-color: #5aa4a5; }
 .admin-dashboard-page .interactive-editor .canvas-drag-handle { position: absolute; top: -13px; left: 50%; display: grid; place-items: center; width: 28px; height: 24px; transform: translateX(-50%); border: 1px solid #90c5c2; border-radius: 8px; background: #e5f4f3; color: #2d777b; cursor: grab; font-size: 1rem; font-weight: 400; line-height: 1; touch-action: none; }
@@ -505,9 +692,30 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   flex: 0 0 1.2rem;
   width: 1.2rem;
   place-items: center;
-  font-family: "Segoe UI Symbol", "Noto Sans Symbols", sans-serif;
-  font-size: 1rem;
   line-height: 1;
+}
+
+.admin-dashboard-page .admin-nav .nav-icon svg {
+  width: 1.1rem;
+  height: 1.1rem;
+  stroke-width: 2;
+}
+
+.admin-dashboard-page .interactive-editor .component-list button > span {
+  display: grid;
+  place-items: center;
+}
+
+.admin-dashboard-page .interactive-editor .component-list button > span svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke-width: 2.25;
+}
+
+.admin-dashboard-page .interactive-editor .page-stepper button svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  stroke-width: 2.5;
 }
 
 /* Older navigation styles generated an icon with ::before.  The icons are now
@@ -547,20 +755,149 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .admin-dashboard-page .activity-table-wrap th, .admin-dashboard-page .activity-table-wrap td { padding: .9rem .75rem; border-bottom: 1px solid #eee3d9; color: #66574f; }
 .admin-dashboard-page .activity-table-wrap th { color: #2b6267; font-size: .78rem; text-transform: uppercase; letter-spacing: .05em; }
 .admin-dashboard-page .activity-table-wrap td strong { color: #442a22; }
+.admin-dashboard-page .activity-module-table { display: grid; gap: 1.15rem; }
+.admin-dashboard-page .activity-module-table .button { min-height: 38px; white-space: nowrap; }
 .admin-dashboard-page .score { display: inline-grid; min-width: 2.7rem; place-items: center; padding: .24rem .45rem; border-radius: 99px; font-weight: 800; }
 .admin-dashboard-page .score-pass { background: #d9f1e6; color: #287254; }
 .admin-dashboard-page .score-review { background: #fff0c6; color: #846012; }
+
+/* Halaman QR Code mengikuti ruang kerja editorial yang sama. */
+.admin-dashboard-page .qr-intro {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1.4rem;
+  border: 1px solid #d9e8e6;
+  border-left: 7px solid #5aa4a5;
+  border-radius: 17px;
+  background: repeating-linear-gradient(to bottom, #fffdfa 0 27px, #e8ddd2 28px, #fffdfa 29px);
+  box-shadow: 0 10px 24px rgba(90,75,53,.08);
+}
+.admin-dashboard-page .qr-intro h2 { margin: .15rem 0; color: #442a22; font-family: Caveat, "Segoe Print", cursive; font-size: 2.15rem; }
+.admin-dashboard-page .qr-intro p:not(.eyebrow) { max-width: 68ch; margin: 0; color: #705e55; line-height: 1.55; }
+.admin-dashboard-page .qr-badge { flex: 0 0 auto; padding: .55rem .8rem; border-radius: 999px; background: #dff1ef; color: #2b6267; font-weight: 800; }
+.admin-dashboard-page .qr-workspace { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(270px, .75fr); gap: 1.25rem; margin-top: 1.25rem; }
+.admin-dashboard-page .qr-form,
+.admin-dashboard-page .qr-preview { display: grid; align-content: start; gap: .9rem; padding: 1.35rem; border: 1px solid #ded2c7; border-radius: 17px; background: #fffdfa; box-shadow: 0 10px 24px rgba(90,75,53,.08); }
+.admin-dashboard-page .qr-form label { display: grid; gap: .42rem; color: #442a22; font-weight: 800; }
+.admin-dashboard-page .qr-form input:not([type="file"]) { min-height: 46px; border: 1px solid #c8dfdc; border-radius: 10px; background: #fff; color: #442a22; padding: .7rem .8rem; font: inherit; }
+.admin-dashboard-page .qr-form small { color: #76675f; font-size: .83rem; font-weight: 500; line-height: 1.45; }
+.admin-dashboard-page .qr-upload-control { padding: 1rem; border: 1px dashed #82bdbc; border-radius: 12px; background: #eff9f8; }
+.admin-dashboard-page .qr-upload-control input { max-width: 100%; color: #2b6267; }
+.admin-dashboard-page .qr-upload-control strong { color: #2b6267; }
+.admin-dashboard-page .qr-media-preview { display: grid; gap: .55rem; padding-top: .25rem; color: #442a22; }
+.admin-dashboard-page .qr-media-preview video { width: 100%; max-height: 260px; border-radius: 10px; background: #203b40; }
+.admin-dashboard-page .qr-media-preview audio { width: 100%; }
+.admin-dashboard-page .qr-preview { justify-items: center; min-height: 380px; text-align: center; }
+.admin-dashboard-page .qr-preview > img { width: min(100%, 260px); aspect-ratio: 1; border: 1px solid #d4e6e4; border-radius: 14px; background: #fff; padding: .7rem; object-fit: contain; }
+.admin-dashboard-page .qr-preview > strong { color: #442a22; font-size: 1.1rem; }
+.admin-dashboard-page .qr-preview > small { width: 100%; overflow-wrap: anywhere; color: #6f625c; line-height: 1.45; }
+.admin-dashboard-page .qr-empty { display: grid; place-items: center; align-content: center; gap: .65rem; min-height: 280px; color: #705e55; }
+.admin-dashboard-page .qr-empty span { display: grid; width: 82px; height: 82px; place-items: center; border-radius: 18px; background: #ddf1ef; color: #2b777b; font-size: 2.5rem; font-weight: 800; }
+.admin-dashboard-page .qr-empty strong { color: #2b6267; }
+.admin-dashboard-page .qr-empty p { max-width: 30ch; margin: 0; line-height: 1.5; }
+.admin-dashboard-page .qr-table-panel { margin-top: 1.25rem; }
+.admin-dashboard-page .qr-table-wrap table { min-width: 830px; }
+.admin-dashboard-page .qr-table-wrap td { vertical-align: middle; }
+.admin-dashboard-page .qr-table-wrap td small { display: block; margin-top: .28rem; color: #77675f; }
+.admin-dashboard-page .qr-table-wrap .qr-target { max-width: 250px; overflow-wrap: anywhere; font-size: .84rem; }
+.admin-dashboard-page .qr-table-image { display: block; width: 66px; height: 66px; padding: .22rem; border: 1px solid #d5e7e5; border-radius: 8px; background: #fff; }
+.admin-dashboard-page .qr-status { display: inline-block; padding: .3rem .55rem; border-radius: 999px; font-size: .82rem; font-weight: 800; }
+.admin-dashboard-page .qr-status.is-published { background: #d9f1e6; color: #287254; }
+.admin-dashboard-page .qr-status.is-draft { background: #fff0c6; color: #846012; }
+.admin-dashboard-page .qr-copy-button { min-height: 38px; white-space: nowrap; }
+.admin-dashboard-page .qr-heading-actions { align-items: center; display: flex; flex-wrap: wrap; gap: .7rem; justify-content: flex-end; }
+.admin-dashboard-page .media-modal { max-width: 560px !important; }
+.admin-dashboard-page .media-modal .qr-upload-control { display: grid; gap: .5rem; margin-top: 1rem; }
+
+/* Lined-paper headers reserve a full writing row for larger display type. */
+.admin-dashboard-page .workspace-heading,
+.admin-dashboard-page .dashboard-hero,
+.admin-dashboard-page .qr-intro,
+.admin-dashboard-page .pdf-editor-intro,
+.admin-dashboard-page .editor-dashboard-shell > .editor-toolbar,
+.admin-dashboard-page .interactive-editor > .editor-header {
+  --paper-line-gap: 60px;
+  background: repeating-linear-gradient(to bottom, #fdfbf7 0 calc(var(--paper-line-gap) - 2px), #e2d5c9 calc(var(--paper-line-gap) - 1px), #fdfbf7 var(--paper-line-gap)) !important;
+}
+.admin-dashboard-page .workspace-heading h1,
+.admin-dashboard-page .dashboard-hero h1,
+.admin-dashboard-page .qr-intro h2,
+.admin-dashboard-page .pdf-editor-intro h2 {
+  line-height: 1.22 !important;
+  padding-block: .08em;
+}
+@media (max-width: 640px) {
+  .admin-dashboard-page .workspace-heading,
+  .admin-dashboard-page .dashboard-hero,
+  .admin-dashboard-page .qr-intro,
+  .admin-dashboard-page .pdf-editor-intro { --paper-line-gap: 48px; }
+}
 
 @media (max-width: 760px) {
   .admin-dashboard-page .activity-book-picker { grid-template-columns: 1fr; padding: 1.15rem; }
   .admin-dashboard-page .activity-book-grid { grid-template-columns: 1fr; }
   .admin-dashboard-page .activity-stats { grid-template-columns: 1fr; }
+  .admin-dashboard-page .qr-intro { align-items: flex-start; flex-direction: column; }
+  .admin-dashboard-page .qr-workspace { grid-template-columns: 1fr; }
 }
 .admin-dashboard-page .interactive-editor .canvas-block.type-tombol { border: 0; background: transparent; text-align: center; }
 .admin-dashboard-page .interactive-editor .canvas-block.type-tombol button { border: 0; border-radius: 9px; background: #4d989a; color: white; padding: .65rem 1rem; font-weight: 800; }
 .admin-dashboard-page .interactive-editor .canvas-image-placeholder { display: grid; place-items: center; min-height: 115px; border-radius: 8px; background: #dff2f1; color: #39777b; font-size: 2rem; }
 .admin-dashboard-page .interactive-editor .canvas-image-placeholder small { margin-top: .35rem; font-size: .78rem; }
 .admin-dashboard-page .interactive-editor .canvas-image-placeholder img { display: block; width: 100%; max-height: 420px; border-radius: 7px; object-fit: contain; background: #fff; }
+.admin-dashboard-page .interactive-editor .embedded-pdf-page {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+  pointer-events: none;
+}
+
+/* PDF impor memakai ukuran halaman asli, bukan kanvas A4 buatan editor. */
+.admin-dashboard-page .interactive-editor .canvas.native-pdf-canvas {
+  max-width: min(100%, 720px);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.admin-dashboard-page .interactive-editor .canvas.native-pdf-canvas .canvas-block.is-full-page {
+  border: 0;
+}
+.admin-dashboard-page .interactive-editor .canvas.native-pdf-canvas .canvas-image-placeholder {
+  overflow: hidden;
+}
+/* Edge memberi jalur gelap untuk scrollbar di viewer PDF bawaannya. Lebarkan
+   frame sedikit lalu klip jalur tersebut agar yang tampak hanya halaman PDF. */
+.admin-dashboard-page .interactive-editor .canvas.native-pdf-canvas .embedded-pdf-page {
+  width: calc(100% + 20px);
+  max-width: none;
+  margin-right: -20px;
+}
+.admin-dashboard-page .interactive-editor .canvas-block.type-gambar {
+  box-sizing: border-box;
+  overflow: hidden;
+  padding: 0;
+  border-radius: 0;
+}
+.admin-dashboard-page .interactive-editor .canvas-block.type-gambar .canvas-image-placeholder {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: transparent;
+  border-radius: 0;
+}
+.admin-dashboard-page .interactive-editor .canvas-block.type-gambar .canvas-image-placeholder img {
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  object-fit: contain;
+}
 .admin-dashboard-page .interactive-editor .canvas-media { display: grid; gap: .55rem; min-width: 250px; }
 .admin-dashboard-page .interactive-editor .canvas-media input { width: 100%; border: 1px solid #bddbd8; border-radius: 7px; background: #fff; color: #442a22; padding: .5rem; font-size: .76rem; }
 .admin-dashboard-page .interactive-editor .canvas-media iframe { width: 100%; aspect-ratio: 16 / 9; border: 0; border-radius: 7px; background: #172f33; }
@@ -577,6 +914,7 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
 .admin-dashboard-page .interactive-editor .import-panel strong { color: #315e62; }
 .admin-dashboard-page .interactive-editor .import-panel small { color: #705e55; line-height: 1.45; }
 .admin-dashboard-page .interactive-editor .import-panel label { display: grid; gap: .35rem; color: #5c4a42; font-size: .78rem; font-weight: 700; }
+.admin-dashboard-page .interactive-editor .add-page-button { margin-top: -.35rem; width: 100%; }
 .admin-dashboard-page .interactive-editor .helper { color: #71635c; }
 
 @media (max-width: 900px) {
@@ -712,7 +1050,7 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   .admin-dashboard-page .admin-nav > a,
   .admin-dashboard-page .admin-nav > .workspace-switcher,
   .admin-dashboard-page .admin-nav > .storage-card { display: none !important; }
-  .admin-dashboard-page .admin-nav.is-open > a { display: block !important; grid-column: 1 / -1; margin: .15rem 0 !important; }
+  .admin-dashboard-page .admin-nav.is-open > a { display: flex !important; grid-column: 1 / -1; margin: .15rem 0 !important; }
   .admin-dashboard-page .admin-nav.is-open { padding-bottom: .85rem !important; }
 }
 
@@ -793,7 +1131,7 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   }
 
   .admin-dashboard-page .admin-nav.is-open > a {
-    display: block !important;
+    display: flex !important;
     margin: .15rem 0 !important;
     padding: .8rem !important;
   }
@@ -1109,7 +1447,13 @@ a.button, a.button:hover, a.button:focus, a.button:visited { text-decoration: no
   font-size: clamp(2.25rem, 4vw, 3.5rem) !important;
 }
 
-.admin-dashboard-page .about-hero > div:last-child > p:not(.eyebrow),
+.admin-dashboard-page .about-hero > div:last-child > p:not(.eyebrow) {
+  max-width: 76ch !important;
+  color: #705e55 !important;
+  font-size: 1.05rem !important;
+  line-height: 1.55 !important;
+}
+
 .admin-dashboard-page .about-cards .about-card p {
   max-width: 72ch !important;
   color: #705e55 !important;

@@ -17,6 +17,8 @@ type RequestBody = {
 }
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const MAX_TITLE_LENGTH = 200
+const MAX_JSON_BYTES = 256 * 1024
 
 function json(body: Record<string, unknown>, status = 200) {
   return Response.json(body, status === 204 ? undefined : { status, headers: { 'content-type': 'application/json; charset=utf-8' } })
@@ -27,18 +29,23 @@ function isUuid(value: unknown): value is string {
 }
 
 function isMetadataObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
+  return typeof value === 'object' && value !== null && !Array.isArray(value) && new TextEncoder().encode(JSON.stringify(value)).byteLength <= MAX_JSON_BYTES
+}
+
+function isValidTitle(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0 && value.trim().length <= MAX_TITLE_LENGTH
 }
 
 function isNonNegativeSafeInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0
 }
 
-const LOCAL_DEV_ORIGIN = 'http://localhost:5173'
+const DEFAULT_ORIGIN = 'http://localhost:5173'
+const allowedOrigins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? DEFAULT_ORIGIN).split(',').map((value) => value.trim()).filter(Boolean))
 
-function corsHeaders() {
+function corsHeaders(origin: string) {
   return {
-    'access-control-allow-origin': LOCAL_DEV_ORIGIN,
+    'access-control-allow-origin': origin,
     'access-control-allow-headers': 'authorization, x-client-info, apikey, content-type, x-retry-count, traceparent, tracestate, baggage',
     'access-control-allow-methods': 'POST, OPTIONS',
     'vary': 'Origin',
@@ -71,7 +78,7 @@ const protectedHandler = withSupabase({ auth: 'user' }, async (request, context)
     const idempotencyKey = input.idempotencyKey === undefined ? crypto.randomUUID() : input.idempotencyKey
     if (!isUuid(idempotencyKey)) return json({ error: 'invalid_request' }, 400)
     if (input.operation === 'create') {
-      if (!isUuid(input.bookId) || !isUuid(input.draftId) || typeof input.title !== 'string' || input.title.trim() === '') {
+      if (!isUuid(input.bookId) || !isUuid(input.draftId) || !isValidTitle(input.title)) {
         return json({ error: 'invalid_request' }, 400)
       }
       const { data, error } = await context.supabaseAdmin.rpc('admin_create_book_with_draft_idempotent', {
@@ -90,7 +97,7 @@ const protectedHandler = withSupabase({ auth: 'user' }, async (request, context)
     }
 
     if (input.operation === 'update_metadata') {
-      if (!isUuid(input.bookId) || !isNonNegativeSafeInteger(input.expectedRevision) || typeof input.title !== 'string' || input.title.trim() === '' || !isMetadataObject(input.draftMetadata)) {
+      if (!isUuid(input.bookId) || !isNonNegativeSafeInteger(input.expectedRevision) || !isValidTitle(input.title) || !isMetadataObject(input.draftMetadata)) {
         return json({ error: 'invalid_request' }, 400)
       }
       const { data, error } = await context.supabaseAdmin.rpc('admin_update_book_draft_metadata_cas_idempotent', {
@@ -161,15 +168,15 @@ const protectedHandler = withSupabase({ auth: 'user' }, async (request, context)
 export default {
   fetch: async (request: Request) => {
     const origin = request.headers.get('origin')
-    if (origin && origin !== LOCAL_DEV_ORIGIN) return json({ error: 'origin_not_allowed' }, 403)
+    if (origin && !allowedOrigins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
     if (request.method === 'OPTIONS') {
-      if (origin !== LOCAL_DEV_ORIGIN) return json({ error: 'origin_not_allowed' }, 403)
-      return new Response(null, { status: 204, headers: corsHeaders() })
+      if (!origin || !allowedOrigins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
+      return new Response(null, { status: 204, headers: corsHeaders(origin) })
     }
     const response = await protectedHandler(request)
-    if (origin !== LOCAL_DEV_ORIGIN) return response
+    if (!origin) return response
     const headers = new Headers(response.headers)
-    for (const [key, value] of Object.entries(corsHeaders())) headers.set(key, value)
+    for (const [key, value] of Object.entries(corsHeaders(origin))) headers.set(key, value)
     return new Response(response.body, { status: response.status, headers })
   },
 }
