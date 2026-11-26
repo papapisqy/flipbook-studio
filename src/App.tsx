@@ -2237,7 +2237,7 @@ function QrCodeRoute() {
         window.localStorage.removeItem(`flipbook-studio-lkpd-draft-${item.public_slug}`);
         setLocalLkpd((current) => current.filter((draft) => draft.id !== item.id));
       } else if (supabase) {
-        const { error } = await supabase.from("activity_definitions").delete().eq("id", item.id);
+        const { error } = await supabase.functions.invoke("delete-activity-definition", { body: { definition_id: item.id } });
         if (error) throw error;
         setSavedLkpd((current) => current.filter((draft) => draft.id !== item.id));
         if (item.public_slug) window.localStorage.removeItem(`flipbook-studio-lkpd-draft-${item.public_slug}`);
