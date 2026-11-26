@@ -5571,11 +5571,10 @@ function PdfFlipbook({
   const turnPage = (direction: "previous" | "next") => {
     const pageFlip = flipRef.current?.pageFlip?.();
     if (!pageFlip) return;
-    // Button navigation deliberately uses the direct page API. It remains
-    // reliable on touch screens even while a page-turn animation is settling.
-    if (direction === "previous") pageFlip.turnToPrevPage();
-    else pageFlip.turnToNextPage();
-    setCurrentPage(pageFlip.getCurrentPageIndex());
+    // Controls live outside the page-turn gesture area, so preserve the
+    // animated turn rather than jumping directly to the adjacent page.
+    if (direction === "previous") pageFlip.flipPrev("bottom");
+    else pageFlip.flipNext("bottom");
   };
   return (
     <div ref={stageRef} className="flipbook-stage flipbook-zoom-stage" onMouseDownCapture={(event) => { if (!(event.target as Element).closest(".pdf-flipbook-navigation, .flipbook-zoom-control, .flipbook-lens-size-control")) pointerStartRef.current = { x: event.clientX, y: event.clientY }; }} onMouseMove={magnifierEnabled ? moveLens : undefined} onMouseLeave={() => setLens(null)}>
