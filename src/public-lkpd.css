@@ -157,6 +157,42 @@
 .public-reader .public-activity-actions { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 0.65rem; justify-content: flex-end; padding-top: 0.4rem; }
 .public-reader .public-activity-actions .button.primary { background: #4d989a; border-color: #3f8e94; }
 
+/* Balon umpan balik untuk siswa ketika ada bagian LKPD yang belum lengkap. */
+.public-reader p[role="status"] {
+  position: fixed;
+  z-index: 100;
+  right: 1.25rem;
+  bottom: 1.25rem;
+  width: min(440px, calc(100vw - 2rem));
+  margin: 0;
+  border: 1px solid #9fcdc4;
+  border-left: 6px solid #4d989a;
+  border-radius: 16px;
+  background: #fffdf8;
+  box-shadow: 0 16px 36px rgba(58, 87, 84, 0.22);
+  color: #315e62;
+  font-weight: 750;
+  line-height: 1.45;
+  padding: 1rem 1.15rem;
+  animation: public-notice-enter 180ms ease-out;
+}
+
+.public-reader p[role="status"]::before {
+  content: "Perlu dilengkapi";
+  display: block;
+  margin-bottom: 0.25rem;
+  color: #4d989a;
+  font-size: 0.74rem;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+@keyframes public-notice-enter {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 .public-reader .public-completion {
   position: relative;
   overflow: hidden;
@@ -240,4 +276,23 @@
   .public-reader .public-identity label:first-child,
   .public-reader .public-identity label:nth-child(3) { grid-column: auto; }
   .public-reader .public-identity .button { width: 100%; justify-content: center; }
+  .public-reader p[role="status"] { right: 0.85rem; bottom: 0.85rem; }
+}
+/* Indikator proses kecil pada tombol simpan nilai. */
+.button-loader {
+  display: inline-block;
+  width: 1em;
+  height: 1em;
+  margin-right: 0.35rem;
+  vertical-align: -0.14em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: button-loader-spin 0.7s linear infinite;
+}
+
+@keyframes button-loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

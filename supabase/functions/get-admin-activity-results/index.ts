@@ -7,6 +7,7 @@ const service = createClient(
 )
 
 const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:4173,http://localhost:5173').split(',').map((value) => value.trim()).filter(Boolean))
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const json = (body: Record<string, unknown>, status = 200, origin = '') => Response.json(body, {
   status,
   headers: {
@@ -42,6 +43,9 @@ Deno.serve(async (request) => {
   const { data: profile } = await service.from('admin_profiles').select('id').eq('id', adminId).eq('access_status', 'active').maybeSingle()
   if (!profile) return json({ error: 'forbidden' }, 403, origin)
 
+  let body: Record<string, unknown> = {}
+  try { body = await request.json() as Record<string, unknown> } catch { /* daftar hasil tidak memerlukan body */ }
+
   const { data: definitions, error: definitionsError } = await service
     .from('activity_definitions')
     .select('id,title')
@@ -50,6 +54,27 @@ Deno.serve(async (request) => {
 
   const definitionIds = (definitions ?? []).map((definition) => definition.id)
   if (!definitionIds.length) return json({ attempts: [] }, 200, origin)
+
+  const requestedAttemptId = typeof body.attempt_id === 'string' ? body.attempt_id : ''
+  if (requestedAttemptId) {
+    if (!UUID.test(requestedAttemptId)) return json({ error: 'invalid_request' }, 400, origin)
+    const { data: attempt, error: attemptError } = await service
+      .from('activity_attempts')
+      .select('id,activity_version_id,student_full_name,student_class,student_school,status,finalized_at')
+      .eq('id', requestedAttemptId)
+      .in('activity_version_id', definitionIds)
+      .maybeSingle()
+    if (attemptError) return json({ error: 'unavailable' }, 503, origin)
+    if (!attempt) return json({ error: 'not_found' }, 404, origin)
+    const [{ data: answerRow, error: answerError }, { data: questions, error: questionsError }, { data: marks, error: marksError }] = await Promise.all([
+      service.from('attempt_answers').select('payload').eq('attempt_id', attempt.id).maybeSingle(),
+      service.from('activity_questions').select('id,prompt,question_type,max_score').eq('definition_id', attempt.activity_version_id).order('position'),
+      service.from('attempt_manual_marks').select('question_id,score').eq('attempt_id', attempt.id),
+    ])
+    if (answerError || questionsError || marksError) return json({ error: 'unavailable' }, 503, origin)
+    const scores = Object.fromEntries((marks ?? []).map((mark) => [mark.question_id, String(mark.score)]))
+    return json({ attempt, questions: questions ?? [], answers: answerRow?.payload ?? {}, scores }, 200, origin)
+  }
 
   const { data: attempts, error: attemptsError } = await service
     .from('activity_attempts')

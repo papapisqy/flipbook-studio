@@ -1,7 +1,7 @@
 import { withSupabase } from 'npm:@supabase/server@1'
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
-const DEFAULT_ORIGIN = 'http://localhost:5173'
+const DEFAULT_ORIGIN = 'http://localhost:4173,http://localhost:5173'
 const allowedOrigins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? DEFAULT_ORIGIN).split(',').map((value) => value.trim()).filter(Boolean))
 
 function json(body: Record<string, unknown>, status = 200) {
@@ -28,8 +28,9 @@ const handler = withSupabase({ auth: 'user' }, async (request, context) => {
 
 export default { fetch: async (request: Request) => {
   const origin = request.headers.get('origin')
-  if (origin && !allowedOrigins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
-  if (request.method === 'OPTIONS') return !origin || !allowedOrigins.has(origin) ? json({ error: 'origin_not_allowed' }, 403) : new Response(null, { status: 204, headers: cors(origin) })
+  const isLocalOrigin = /^http:\/\/localhost(?::\d+)?$/.test(origin ?? '')
+  if (origin && !allowedOrigins.has(origin) && !isLocalOrigin) return json({ error: 'origin_not_allowed' }, 403)
+  if (request.method === 'OPTIONS') return !origin || (!allowedOrigins.has(origin) && !isLocalOrigin) ? json({ error: 'origin_not_allowed' }, 403) : new Response(null, { status: 204, headers: cors(origin) })
   const response = await handler(request)
   if (!origin) return response
   const headers = new Headers(response.headers); Object.entries(cors(origin)).forEach(([key, value]) => headers.set(key, value))

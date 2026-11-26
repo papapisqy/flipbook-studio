@@ -1,6 +1,6 @@
 import { withSupabase } from 'npm:@supabase/server@1'
 
-const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173').split(',').map(value => value.trim()).filter(Boolean))
+const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://localhost:4173').split(',').map(value => value.trim()).filter(Boolean))
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const json = (body: Record<string, unknown>, status = 200, origin = '') => Response.json(body, { status, headers: { 'content-type': 'application/json', ...(origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {}) } })
 
@@ -16,7 +16,7 @@ const handler = withSupabase({ auth: 'user' }, async (request, context) => {
 export default { fetch: async (request: Request) => {
   const origin = request.headers.get('origin') ?? ''
   if (origin && !origins.has(origin)) return json({ error: 'origin_not_allowed' }, 403)
-  if (request.method === 'OPTIONS') return origin ? new Response(null, { status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, apikey, content-type', vary: 'Origin' } }) : json({ error: 'origin_not_allowed' }, 403)
+  if (request.method === 'OPTIONS') return origin ? new Response(null, { status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'authorization, apikey, content-type, x-client-info, x-supabase-api-version', vary: 'Origin' } }) : json({ error: 'origin_not_allowed' }, 403)
   const response = await handler(request)
   if (!origin) return response
   const headers = new Headers(response.headers); headers.set('access-control-allow-origin', origin); headers.set('vary', 'Origin')
