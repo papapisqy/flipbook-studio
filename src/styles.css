@@ -307,3 +307,5 @@ html,body{scrollbar-width:none;-ms-overflow-style:none}html::-webkit-scrollbar,b
   .flipbook-lens-size-control { display:none; }
   .flipbook-magnifier { max-width:calc(100vw - 32px); max-height:calc(100vw - 32px); }
 }
+
+.pdf-qr-hotspot { touch-action: manipulation; }

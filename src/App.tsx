@@ -5421,6 +5421,7 @@ function PdfFlipbook({
       const start = pointerStartRef.current;
       pointerStartRef.current = null;
       if (!start || Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) return;
+      if ((event.target as Element).closest(".pdf-flipbook-navigation, .flipbook-zoom-control, .flipbook-lens-size-control")) return;
       const stage = stageRef.current;
       if (!stage?.contains(event.target as Node)) return;
       const rect = stage.getBoundingClientRect();
@@ -5570,17 +5571,20 @@ function PdfFlipbook({
   const turnPage = (direction: "previous" | "next") => {
     const pageFlip = flipRef.current?.pageFlip?.();
     if (!pageFlip) return;
-    if (direction === "previous") pageFlip.flipPrev();
-    else pageFlip.flipNext();
+    // Button navigation deliberately uses the direct page API. It remains
+    // reliable on touch screens even while a page-turn animation is settling.
+    if (direction === "previous") pageFlip.turnToPrevPage();
+    else pageFlip.turnToNextPage();
+    setCurrentPage(pageFlip.getCurrentPageIndex());
   };
   return (
-    <div ref={stageRef} className="flipbook-stage flipbook-zoom-stage" onMouseDownCapture={(event) => { pointerStartRef.current = { x: event.clientX, y: event.clientY }; }} onMouseMove={magnifierEnabled ? moveLens : undefined} onMouseLeave={() => setLens(null)}>
+    <div ref={stageRef} className="flipbook-stage flipbook-zoom-stage" onMouseDownCapture={(event) => { if (!(event.target as Element).closest(".pdf-flipbook-navigation, .flipbook-zoom-control, .flipbook-lens-size-control")) pointerStartRef.current = { x: event.clientX, y: event.clientY }; }} onMouseMove={magnifierEnabled ? moveLens : undefined} onMouseLeave={() => setLens(null)}>
       {typeof controlledMagnifierEnabled === "undefined" && <div className="flipbook-zoom-control"><button type="button" className={magnifierEnabled ? "is-active" : ""} onClick={(event) => { event.stopPropagation(); setLocalMagnifierEnabled((enabled) => !enabled); setLens(null); }}>{magnifierEnabled ? "Kaca pembesar aktif" : "Aktifkan kaca pembesar"}</button>{magnifierEnabled && <label>Zoom <select value={zoomPercent} onClick={(event) => event.stopPropagation()} onChange={(event) => setLocalZoomPercent(Number(event.target.value))}><option value={125}>125%</option><option value={150}>150%</option><option value={175}>175%</option><option value={200}>200%</option></select></label>}</div>}
       {magnifierEnabled && <div className="flipbook-lens-size-control"><label>Ukuran <input type="range" min="85" max="400" step="5" value={lensRadius} onChange={(event) => setLensRadius(Number(event.target.value))} aria-label="Ukuran kaca pembesar" /><output>{lensRadius}px</output></label><label>Sudut <input type="range" min="0" max="50" step="1" value={lensCornerRadius} onChange={(event) => setLensCornerRadius(Number(event.target.value))} aria-label="Kelengkungan sudut kaca pembesar" /><output>{lensCornerRadius}%</output></label></div>}
       <div className="flipbook-scale-wrap"><HTMLFlipBook key={isPortrait ? "portrait" : "spread"} ref={flipRef} width={pageWidth} height={pageHeight} size="stretch" minWidth={pageWidth} maxWidth={pageWidth} minHeight={pageHeight} maxHeight={pageHeight} showCover drawShadow flippingTime={900} usePortrait={isPortrait} showPageCorners={false} disableFlipByClick clickEventForward={false} className="flipbook" startPage={0} onFlip={(event: { data: number }) => setCurrentPage(event.data)}>
         {flipbookPages.map((page, index) => {
           const sourcePageIndex = selectedCover ? (coverPlacement === "replace" ? index : index - 1) : index;
-          return <div className="flip-page" key={`${title}-${index}`}><img src={page} alt={index === 0 && selectedCover ? `${title} sampul` : `${title} halaman ${index + 1}`} />{sourcePageIndex >= 0 && (qrRegions[sourcePageIndex] ?? []).map((qr, qrIndex) => <button key={`${index}-${qrIndex}`} type="button" className="pdf-qr-hotspot" aria-label="Buka media dari QR atau barcode" style={{ left: `${qr.left}%`, top: `${qr.top}%`, width: `${qr.width}%`, height: `${qr.height}%` }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onTouchStart={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActiveQr(qr.data); }} />)}</div>;
+          return <div className="flip-page" key={`${title}-${index}`}><img src={page} alt={index === 0 && selectedCover ? `${title} sampul` : `${title} halaman ${index + 1}`} />{sourcePageIndex >= 0 && (qrRegions[sourcePageIndex] ?? []).map((qr, qrIndex) => <button key={`${index}-${qrIndex}`} type="button" className="pdf-qr-hotspot" aria-label="Buka media dari QR atau barcode" style={{ left: `${qr.left}%`, top: `${qr.top}%`, width: `${qr.width}%`, height: `${qr.height}%` }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onTouchStart={(event) => event.stopPropagation()} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActiveQr(qr.data); }} />)}</div>;
         })}
       </HTMLFlipBook></div>
       <div className="pdf-flipbook-navigation" aria-label="Navigasi halaman"><button type="button" className="button quiet" disabled={currentPage <= 0} onClick={(event) => { event.preventDefault(); event.stopPropagation(); turnPage("previous"); }}>Sebelumnya</button><span className="flipbook-page-status" aria-live="polite">{currentPage + 1} / {flipbookPages.length}</span><button type="button" className="button primary" disabled={currentPage >= flipbookPages.length - 1} onClick={(event) => { event.preventDefault(); event.stopPropagation(); turnPage("next"); }}>Berikutnya</button></div>
