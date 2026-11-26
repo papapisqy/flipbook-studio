@@ -3,7 +3,7 @@ import { createClient } from 'npm:@supabase/supabase-js@2'
 import { generateActivitySessionToken, hashActivitySessionToken } from '../_shared/activitySession.ts'
 
 const client = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } })
-const DEFAULT_ORIGIN = 'http://localhost:5173'
+const DEFAULT_ORIGIN = 'http://localhost:4173,http://localhost:5173'
 const allowedOrigins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? DEFAULT_ORIGIN).split(',').map((value) => value.trim()).filter(Boolean))
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
@@ -11,15 +11,21 @@ function json(body: Record<string, unknown>, status = 200, requestId = '', reque
   return new Response(JSON.stringify(body), { status, headers: {
     'content-type': 'application/json', 'cache-control': 'no-store',
     ...(requestOrigin ? { 'access-control-allow-origin': requestOrigin, vary: 'Origin' } : {}), 'access-control-allow-methods': 'POST, OPTIONS',
-    'access-control-allow-headers': 'content-type, x-correlation-id', ...(requestId ? { 'x-request-id': requestId } : {})
+    'access-control-allow-headers': 'content-type, apikey, authorization, x-client-info, x-supabase-api-version, x-correlation-id', ...(requestId ? { 'x-request-id': requestId } : {})
   }})
 }
 
 Deno.serve(async (request) => {
   const requestId = crypto.randomUUID()
   const requestOrigin = request.headers.get('origin')
-  if (requestOrigin && !allowedOrigins.has(requestOrigin)) return json({ error: 'origin_not_allowed' }, 403, requestId)
-  if (request.method === 'OPTIONS') return requestOrigin ? json({}, 204, requestId, requestOrigin) : json({ error: 'origin_not_allowed' }, 403, requestId)
+  const isLocalOrigin = /^http:\/\/localhost(?::\d+)?$/.test(requestOrigin ?? '')
+  if (requestOrigin && !allowedOrigins.has(requestOrigin) && !isLocalOrigin) return json({ error: 'origin_not_allowed' }, 403, requestId, requestOrigin)
+  if (request.method === 'OPTIONS') return requestOrigin ? new Response(null, { status: 204, headers: {
+    'access-control-allow-origin': requestOrigin,
+    vary: 'Origin',
+    'access-control-allow-methods': 'POST, OPTIONS',
+    'access-control-allow-headers': 'content-type, apikey, authorization, x-client-info, x-supabase-api-version, x-correlation-id',
+  } }) : json({ error: 'origin_not_allowed' }, 403, requestId)
   if (request.method !== 'POST') return json({ error: 'method_not_allowed' }, 405, requestId, requestOrigin ?? '')
   const contentLength = Number(request.headers.get('content-length') ?? 0)
   if (contentLength > 4096) return json({ error: 'request_too_large' }, 413, requestId, requestOrigin ?? '')

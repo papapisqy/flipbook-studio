@@ -7,3 +7,13 @@ verify_jwt = false
 # Public student entry point. The function validates an attempt-bound opaque
 # token contract; deployment is blocked pending the security audit package.
 verify_jwt = false
+
+[functions.get-public-activity]
+# Public QR target. The function itself only returns published LKPD content
+# and intentionally excludes rubric and answer-key data.
+verify_jwt = false
+
+[functions.get-admin-activity-results]
+# The function validates the caller's Supabase session and checks active admin
+# status before returning only that administrator's LKPD attempts.
+verify_jwt = false

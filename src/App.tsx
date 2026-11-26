@@ -19,6 +19,8 @@ import {
 } from "react-router-dom";
 import type { Session } from "@supabase/supabase-js";
 import { EmptyState, ErrorState, LoadingState } from "./components/AsyncState";
+import "./lkpd-import-modal.css";
+import "./public-lkpd.css";
 import { mockBooks, type MockBook } from "./data/mockContent";
 import {
   clearReaderProgress,
@@ -35,6 +37,7 @@ import { setSessionPersistence, supabase, supabaseConfigurationStatus } from "./
 import HTMLFlipBook from "react-pageflip";
 import QRCode from "qrcode";
 import QrScanner from "qr-scanner";
+import * as XLSX from "xlsx";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorker from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import {
@@ -180,6 +183,14 @@ function bookSlug(title: string) {
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") || "flipbook"
   );
+}
+
+function downloadExcelTemplate(fileName: string, headers: string[], rows: Array<Array<string | number>>) {
+  const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  sheet["!cols"] = headers.map((header) => ({ wch: Math.max(header.length + 4, 18) }));
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, sheet, "Soal LKPD");
+  XLSX.writeFileXLSX(workbook, `${bookSlug(fileName)}.xlsx`);
 }
 
 function saveBookRouteMetadata(title: string, fileName?: string) {
@@ -430,7 +441,7 @@ function PublicReaderRoute() {
   return <main className="public-reader"><ErrorState title={status === "error" ? "E-modul tidak dapat dimuat" : "E-modul tidak tersedia"}>{status === "loading" ? "Memuat e-modul…" : "Tautan ini tidak lagi tersedia atau belum dipublikasikan."}</ErrorState></main>;
 }
 
-function PublicStandaloneLkpdRoute() {
+function LegacyPublicStandaloneLkpdRoute() {
   const { slug = "" } = useParams();
   const [activity, setActivity] = useState<any>(null);
   const [identity, setIdentity] = useState({ full_name: "", class_name: "", school_name: "" });
@@ -446,6 +457,76 @@ function PublicStandaloneLkpdRoute() {
   if (loading) return <main className="public-reader"><LoadingState label="Memuat LKPD…" /></main>;
   if (!activity) return <main className="public-reader"><ErrorState title="LKPD belum tersedia">Tautan ini belum dipublikasikan atau tidak lagi tersedia.</ErrorState></main>;
   return <main className="public-reader"><header><img src="/flipbook-studio-logo.png?v=2" alt="E-Modul Flipbook" /><strong>{activity.title}</strong></header>{!studentSession && !notice.includes("berhasil") ? <section className="panel public-identity"><h1>{activity.title}</h1><p>Isi identitas untuk mulai mengerjakan LKPD.</p><form onSubmit={start}><label>Nama lengkap<input required minLength={2} value={identity.full_name} onChange={(event) => setIdentity({ ...identity, full_name: event.target.value })} /></label><label>Kelas<input required value={identity.class_name} onChange={(event) => setIdentity({ ...identity, class_name: event.target.value })} /></label><label>Nama sekolah<input required minLength={2} value={identity.school_name} onChange={(event) => setIdentity({ ...identity, school_name: event.target.value })} /></label><button className="button primary" disabled={submitting}>{submitting ? "Memulai…" : "Mulai LKPD"}</button>{notice && <p role="status">{notice}</p>}</form></section> : <section className="panel public-activity"><h1>{activity.title}</h1>{activity.questions.map((question: any, index: number) => <fieldset key={question.id}><legend>{index + 1}. {question.prompt}</legend>{question.question_type === "multiple_choice" ? question.options.map((option: string) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => { const next = { ...answers, [question.id]: option }; setAnswers(next); void saveDraft(next); }} /> {option}</label>) : <textarea value={answers[question.id] ?? ""} onChange={(event) => { const next = { ...answers, [question.id]: event.target.value }; setAnswers(next); }} onBlur={() => void saveDraft(answers)} />}</fieldset>)}<button className="button primary" disabled={submitting || notice.includes("berhasil")} onClick={() => void submit()}>{submitting ? "Mengirim…" : "Kirim jawaban"}</button>{notice && <p role="status">{notice}</p>}</section>}</main>;
+}
+
+function PublicStandaloneLkpdRoute() {
+  const { slug = "" } = useParams();
+  const [activity, setActivity] = useState<any>(null);
+  const [identity, setIdentity] = useState({ full_name: "", class_name: "", school_name: "" });
+  const [studentSession, setStudentSession] = useState<any>(null);
+  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [notice, setNotice] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [activityIndex, setActivityIndex] = useState(0);
+
+  useEffect(() => {
+    if (!supabase || !slug) { setLoading(false); return; }
+    void supabase.functions.invoke("get-public-activity", { body: { slug } }).then(({ data }) => {
+      setActivity(data?.activity ?? null);
+      setLoading(false);
+    });
+  }, [slug]);
+
+  const start = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!supabase || !activity) return;
+    setSubmitting(true);
+    const { data, error } = await supabase.functions.invoke("start-activity-session", { body: { activity_version_id: activity.id, ...identity } });
+    setSubmitting(false);
+    if (error || !data?.session_token) { setNotice("Identitas belum dapat disimpan. Coba lagi."); return; }
+    setStudentSession(data);
+  };
+
+  const saveDraft = async (nextAnswers: Record<string, string>) => {
+    if (!supabase || !studentSession) return;
+    await supabase.functions.invoke("save-activity-draft", { headers: { "x-activity-session": studentSession.session_token }, body: { attempt_id: studentSession.attempt_id, payload: nextAnswers } });
+  };
+
+  const submit = async () => {
+    if (!supabase || !studentSession || !activity) return;
+    if (activity.questions.some((question: any) => !answers[question.id]?.trim())) { setNotice("Jawab semua soal sebelum mengirim."); return; }
+    setSubmitting(true);
+    const { error } = await supabase.functions.invoke("submit-activity", { headers: { "x-activity-session": studentSession.session_token }, body: { attempt_id: studentSession.attempt_id, activity_id: activity.id, answers } });
+    setSubmitting(false);
+    if (error) {
+      setNotice("Jawaban belum dapat dikirim. Coba lagi.");
+      return;
+    }
+    setNotice("");
+    setSubmitted(true);
+    setStudentSession(null);
+  };
+
+  if (loading) return <main className="public-reader"><LoadingState label="Memuat LKPD..." /></main>;
+  if (!activity) return <main className="public-reader"><ErrorState title="LKPD belum tersedia">Tautan ini belum dipublikasikan atau tidak lagi tersedia.</ErrorState></main>;
+  if (submitted) return <main className="public-reader"><section className="panel public-completion" role="status"><div className="public-completion-icon" aria-hidden="true">✓</div><p className="eyebrow">LKPD SELESAI</p><h1>Jawaban sudah dikirim</h1><p>Terima kasih. Jawaban Anda sudah diterima dan akan muncul pada halaman Aktivitas guru.</p></section></main>;
+
+  const activities = Array.from(new Set(activity.questions.map((question: any) => question.activity_title || "Kegiatan 1")));
+  const currentActivity = activities[Math.min(activityIndex, Math.max(activities.length - 1, 0))] || "Kegiatan 1";
+  const currentQuestions = activity.questions.filter((question: any) => (question.activity_title || "Kegiatan 1") === currentActivity);
+  const isLastActivity = activityIndex === activities.length - 1;
+  const continueToNext = () => {
+    if (currentQuestions.some((question: any) => !answers[question.id]?.trim())) { setNotice("Jawab semua soal pada kegiatan ini sebelum melanjutkan."); return; }
+    setNotice("");
+    setActivityIndex((current) => Math.min(current + 1, activities.length - 1));
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  return <main className="public-reader">
+    {!studentSession && !notice.includes("berhasil") ? <section className="panel public-identity"><h1>{activity.title}</h1><p>Isi identitas untuk mulai mengerjakan LKPD.</p><form onSubmit={start}><label>Nama lengkap<input required minLength={2} value={identity.full_name} onChange={(event) => setIdentity({ ...identity, full_name: event.target.value })} /></label><label>Kelas<input required value={identity.class_name} onChange={(event) => setIdentity({ ...identity, class_name: event.target.value })} /></label><label>Nama sekolah<input required minLength={2} value={identity.school_name} onChange={(event) => setIdentity({ ...identity, school_name: event.target.value })} /></label><button className="button primary" disabled={submitting}>{submitting ? "Memulai..." : "Mulai LKPD"}</button>{notice && <p role="status">{notice}</p>}</form></section> : <section className="panel public-activity"><div className="public-activity-heading"><p>Kegiatan {activityIndex + 1} dari {activities.length}</p><h1>{currentActivity}</h1><small>{currentQuestions.length} soal pada kegiatan ini</small></div>{currentQuestions.map((question: any, index: number) => <fieldset key={question.id}><legend>{index + 1}. {question.prompt}</legend>{question.question_type === "multiple_choice" ? question.options.map((option: string) => <label key={option}><input type="radio" name={question.id} checked={answers[question.id] === option} onChange={() => { const next = { ...answers, [question.id]: option }; setAnswers(next); void saveDraft(next); }} /> {option}</label>) : <textarea value={answers[question.id] ?? ""} onChange={(event) => { const next = { ...answers, [question.id]: event.target.value }; setAnswers(next); }} onBlur={() => void saveDraft(answers)} />}</fieldset>)}<div className="public-activity-actions">{activityIndex > 0 && <button type="button" className="button quiet" onClick={() => { setNotice(""); setActivityIndex((current) => Math.max(current - 1, 0)); window.scrollTo({ top: 0, behavior: "smooth" }); }}>Sebelumnya</button>}{isLastActivity ? <button className="button primary" disabled={submitting || notice.includes("berhasil")} onClick={() => void submit()}>{submitting ? "Mengirim..." : "Kirim jawaban"}</button> : <button type="button" className="button primary" onClick={continueToNext}>Lanjut kegiatan</button>}</div>{notice && <p role="status">{notice}</p>}</section>}
+  </main>;
 }
 
 function HomeRoute({ auth }: { auth: AuthState }) {
@@ -1441,11 +1522,27 @@ function AboutRoute() {
   );
 }
 
-function ActivityResultsRoute({ title, onBack }: { title?: string; onBack?: () => void }) {
+function LegacyActivityResultsRoute({ title, onBack }: { title?: string; onBack?: () => void }) {
   const [attempts, setAttempts] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => { if (!supabase) { setLoading(false); return; } void supabase.from("activity_attempts").select("id,student_full_name,student_class,student_school,status,finalized_at,attempt_results(final_score,review_status),activity_definitions(title)").order("created_at", { ascending: false }).then(({ data }) => { setAttempts((data ?? []).filter((attempt: any) => !title || attempt.activity_definitions?.title === title)); setLoading(false); }); }, [title]);
   return <AdminInfoShell active="activity" eyebrow="HASIL LKPD" title={title || "Aktivitas siswa"}><section className="panel activity-results"><div className="panel-heading"><div><p className="eyebrow">HASIL ISIAN SISWA</p><h2>{title || "Semua aktivitas"}</h2><p>Halaman ini khusus untuk memantau jawaban dan nilai siswa.</p></div>{onBack && <button type="button" className="button secondary" onClick={onBack}>Kembali</button>}</div>{loading ? <LoadingState label="Memuat hasil aktivitas…" /> : <div className="activity-table-wrap"><table><thead><tr><th>Siswa</th><th>E-modul</th><th>Kelas / sekolah</th><th>Status</th><th>Nilai</th></tr></thead><tbody>{attempts.length ? attempts.map((attempt) => { const result = Array.isArray(attempt.attempt_results) ? attempt.attempt_results[0] : attempt.attempt_results; return <tr key={attempt.id}><td><strong>{attempt.student_full_name || "Belum mengisi identitas"}</strong></td><td>{attempt.activity_definitions?.title || "—"}</td><td>{[attempt.student_class, attempt.student_school].filter(Boolean).join(" · ") || "—"}</td><td>{result?.review_status === "needs_review" ? "Perlu dinilai" : attempt.status === "finalized" ? "Selesai" : "Draf"}</td><td>{result?.final_score ?? "—"}</td></tr>; }) : <tr><td colSpan={5}>Belum ada hasil isian siswa.</td></tr>}</tbody></table></div>}</section></AdminInfoShell>;
+}
+
+function ActivityResultsRoute({ title, onBack }: { title?: string; onBack?: () => void }) {
+  const [attempts, setAttempts] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    if (!supabase) { setLoading(false); return; }
+    let active = true;
+    void (async () => {
+      const { data, error } = await supabase.functions.invoke("get-admin-activity-results");
+      const rows = error ? [] : (data?.attempts ?? []);
+      if (active) { setAttempts(rows.filter((attempt: any) => !title || attempt.lkpd_title === title)); setLoading(false); }
+    })();
+    return () => { active = false; };
+  }, [title]);
+  return <AdminInfoShell active="activity" eyebrow="HASIL LKPD" title={title || "Aktivitas siswa"}><section className="panel activity-results"><div className="panel-heading"><div><p className="eyebrow">HASIL ISIAN SISWA</p><h2>{title || "Semua aktivitas"}</h2><p>Halaman ini khusus untuk memantau jawaban dan nilai siswa.</p></div>{onBack && <button type="button" className="button secondary" onClick={onBack}>Kembali</button>}</div>{loading ? <LoadingState label="Memuat hasil aktivitas..." /> : <div className="activity-table-wrap"><table><thead><tr><th>Siswa</th><th>LKPD</th><th>Kelas / sekolah</th><th>Status</th><th>Nilai</th></tr></thead><tbody>{attempts.length ? attempts.map((attempt) => { const result = Array.isArray(attempt.attempt_results) ? attempt.attempt_results[0] : attempt.attempt_results; return <tr key={attempt.id}><td><strong>{attempt.student_full_name || "Belum mengisi identitas"}</strong></td><td>{attempt.lkpd_title}</td><td>{[attempt.student_class, attempt.student_school].filter(Boolean).join(" · ") || "—"}</td><td>{result?.review_status === "needs_review" ? "Perlu dinilai" : attempt.status === "finalized" ? "Selesai" : "Draf"}</td><td>{result?.final_score ?? "—"}</td></tr>; }) : <tr><td colSpan={5}>Belum ada hasil isian siswa.</td></tr>}</tbody></table></div>}</section></AdminInfoShell>;
 }
 
 function ActivityRoute() {
@@ -1693,14 +1790,17 @@ function LkpdListRoute({ onCreate }: { onCreate: (title: string) => void }) {
   </AdminInfoShell>;
 }
 
-function LkpdGroupedEditor({ moduleTitle, onTitleChange, questions, setQuestions, saving, notice, onSave, onBack, attempts }: { moduleTitle: string; onTitleChange: (title: string) => void; questions: LkpdQuestionDraft[]; setQuestions: React.Dispatch<React.SetStateAction<LkpdQuestionDraft[]>>; saving: boolean; notice: string; onSave: (status: "draft" | "published") => void; onBack: () => void; attempts: any[] }) {
+function LkpdGroupedEditor({ moduleTitle, onTitleChange, questions, setQuestions, saving, notice, onDismissNotice, onSave, onImportExcel, onBack, attempts }: { moduleTitle: string; onTitleChange: (title: string) => void; questions: LkpdQuestionDraft[]; setQuestions: React.Dispatch<React.SetStateAction<LkpdQuestionDraft[]>>; saving: boolean; notice: string; onDismissNotice?: () => void; onSave: (status: "draft" | "published") => void; onImportExcel: (file: File) => void; onBack: () => void; attempts: any[] }) {
   const activities = Array.from(new Set(questions.map((question) => question.activity_title || "Kegiatan 1")));
+  const excelInputRef = useRef<HTMLInputElement>(null);
   const renameActivity = (before: string, after: string) => setQuestions((current) => current.map((question) => question.activity_title === before ? { ...question, activity_title: after } : question));
   const updateQuestion = (index: number, patch: Partial<LkpdQuestionDraft>) => setQuestions((current) => current.map((question, itemIndex) => itemIndex === index ? { ...question, ...patch } : question));
+  const downloadQuestionTemplate = () => downloadExcelTemplate("template-lkpd", ["Kegiatan", "Jenis soal", "Pertanyaan", "Pilihan 1", "Pilihan 2", "Pilihan 3", "Pilihan 4", "Jawaban benar", "Bobot nilai", "Rubrik"], [["Kegiatan 1", "Uraian", "", "", "", "", "", "", 1, ""]]);
   const addActivity = () => setQuestions((current) => { const existing = new Set(current.map((question) => question.activity_title || "Kegiatan 1")); let sequence = 1; while (existing.has(`Kegiatan ${sequence}`)) sequence += 1; return [...current, newLkpdQuestion(`Kegiatan ${sequence}`)]; });
   const removeActivity = (activity: string) => { if (activities.length > 1) setQuestions((current) => current.filter((question) => question.activity_title !== activity)); };
   return <AdminInfoShell active="activity" eyebrow="PENYUSUNAN LKPD" title={moduleTitle}>
     <section className="panel activity-results lkpd-grouped-editor"><div className="panel-heading"><div><p className="eyebrow">SOAL UNTUK SISWA</p><label className="lkpd-title-field"><span>Judul LKPD</span><input aria-label="Judul LKPD" value={moduleTitle} onChange={(event) => onTitleChange(event.target.value)} placeholder="Masukkan judul LKPD" /></label><p>Kelompokkan soal berdasarkan kegiatan pembelajaran atau evaluasi.</p></div><button type="button" className="button secondary" onClick={onBack}>Kembali</button></div>
+      <div className="lkpd-excel-toolbar"><div><strong>Siapkan soal dengan Excel</strong><small>Unduh template, isi kegiatan dan soal di Excel, lalu impor kembali ke LKPD ini.</small></div><div><button type="button" className="button secondary" onClick={downloadQuestionTemplate}>Unduh template Excel</button><button type="button" className="button secondary" onClick={() => excelInputRef.current?.click()}>Impor Excel</button><input ref={excelInputRef} className="sr-only" type="file" accept=".xlsx,.xls,.csv,text/csv" onChange={(event) => { const file = event.target.files?.[0]; if (file) onImportExcel(file); event.currentTarget.value = ""; }} /></div></div>
       <div className="lkpd-activity-toolbar"><span>{activities.length} kegiatan · {questions.length} soal</span><button type="button" className="button secondary" onClick={addActivity}>+ Tambah kegiatan</button></div>
       <div className="lkpd-activity-stack">{activities.map((activity, activityIndex) => <section className="lkpd-activity-section" key={activityIndex}><header><div><span className="lkpd-activity-number">Kegiatan {activityIndex + 1}</span><input aria-label={`Nama kegiatan ${activityIndex + 1}`} value={activity} onChange={(event) => renameActivity(activity, event.target.value)} /></div><div><small>{questions.filter((question) => question.activity_title === activity).length} soal</small><button type="button" className="button quiet" disabled={activities.length === 1} onClick={() => removeActivity(activity)}>Hapus kegiatan</button></div></header>
         {questions.map((question, questionIndex) => question.activity_title === activity && <article className="lkpd-grouped-question" key={`${activity}-${questionIndex}`}><div className="panel-heading"><strong>Soal {questionIndex + 1}</strong><button type="button" className="button quiet" disabled={questions.length === 1} onClick={() => setQuestions((current) => current.filter((_, index) => index !== questionIndex))}>Hapus</button></div><div className="lkpd-question-fields"><label>Jenis soal<select value={question.question_type} onChange={(event) => updateQuestion(questionIndex, { question_type: event.target.value as LkpdQuestionDraft["question_type"], correct_answer: "", options: event.target.value === "essay" ? [] : ["", ""] })}><option value="multiple_choice">Pilihan ganda</option><option value="essay">Uraian</option></select></label><label>Bobot nilai<input type="number" min="1" max="1000" value={question.max_score} onChange={(event) => updateQuestion(questionIndex, { max_score: Number(event.target.value) })} /></label><label className="is-wide">Pertanyaan<textarea value={question.prompt} onChange={(event) => updateQuestion(questionIndex, { prompt: event.target.value })} /></label>{question.question_type === "multiple_choice" ? <><label className="is-wide">Pilihan jawaban{question.options.map((option, optionIndex) => <input key={optionIndex} value={option} placeholder={`Pilihan ${optionIndex + 1}`} onChange={(event) => updateQuestion(questionIndex, { options: question.options.map((value, currentIndex) => currentIndex === optionIndex ? event.target.value : value) })} />)}</label><label className="is-wide">Jawaban benar<select value={question.correct_answer} onChange={(event) => updateQuestion(questionIndex, { correct_answer: event.target.value })}><option value="">Pilih jawaban benar</option>{question.options.filter(Boolean).map((option) => <option key={option} value={option}>{option}</option>)}</select></label></> : <label className="is-wide">Rubrik penilaian (opsional)<textarea value={question.rubric} onChange={(event) => updateQuestion(questionIndex, { rubric: event.target.value })} /></label>}</div></article>)}<button type="button" className="button secondary lkpd-add-question" onClick={() => setQuestions((current) => [...current, newLkpdQuestion(activity)])}>+ Tambah soal ke kegiatan ini</button></section>)}</div>
@@ -1718,6 +1818,12 @@ function LkpdEditorRoute({ moduleTitle, onBack }: { moduleTitle: string; onBack:
   const [gradingAnswers, setGradingAnswers] = useState<Record<string, string>>({});
   const [gradeValues, setGradeValues] = useState<Record<string, { score: string; comment: string }>>({});
   const [loading, setLoading] = useState(true); const [notice, setNotice] = useState(""); const [saving, setSaving] = useState(false);
+  const [pendingExcelImport, setPendingExcelImport] = useState<{ fileName: string; questions: LkpdQuestionDraft[] } | null>(null);
+  useEffect(() => {
+    if (!/(berhasil|tersimpan|diimpor)/i.test(notice) || /(gagal|tidak dapat|periksa)/i.test(notice)) return;
+    const timeout = window.setTimeout(() => setNotice(""), 3500);
+    return () => window.clearTimeout(timeout);
+  }, [notice]);
   useEffect(() => {
     if (!supabase) { try { const cached = JSON.parse(window.localStorage.getItem(`flipbook-studio-lkpd-draft-${slug}`) ?? "null"); if (Array.isArray(cached?.questions) && cached.questions.length) setQuestions(cached.questions.map((question: LkpdQuestionDraft) => ({ ...question, activity_title: question.activity_title || "Kegiatan 1" }))); } catch { /* cache lokal tidak tersedia */ } setLoading(false); setNotice("Draf lokal dimuat. Supabase belum dikonfigurasi."); return; }
     const loadLkpd = async () => {
@@ -1744,6 +1850,34 @@ function LkpdEditorRoute({ moduleTitle, onBack }: { moduleTitle: string; onBack:
   }, [loading, lkpdTitle, questions, slug]);
   useEffect(() => { if (!supabase || !definitionId) return; void supabase.from("activity_attempts").select("id,student_full_name,student_class,student_school,status,finalized_at,attempt_results(final_score,review_status)").eq("activity_version_id", definitionId).order("created_at", { ascending: false }).then(({ data }) => setAttempts(data ?? [])); }, [definitionId]);
   const updateQuestion = (index: number, patch: Partial<LkpdQuestionDraft>) => setQuestions((current) => current.map((question, itemIndex) => itemIndex === index ? { ...question, ...patch } : question));
+  const importQuestionsFromExcel = async (file: File) => {
+    try {
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: "array" });
+      const firstSheet = workbook.SheetNames[0];
+      if (!firstSheet) throw new Error("Berkas tidak memiliki lembar kerja.");
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets[firstSheet], { defval: "" });
+      const text = (value: unknown) => String(value ?? "").trim();
+      const imported = rows.map((row) => {
+        const type = text(row["Jenis soal"]).toLocaleLowerCase("id-ID");
+        const isMultipleChoice = type.includes("pilihan") || type.includes("ganda");
+        const options = [row["Pilihan 1"], row["Pilihan 2"], row["Pilihan 3"], row["Pilihan 4"]].map(text).filter(Boolean);
+        const score = Number(row["Bobot nilai"]);
+        return {
+          activity_title: text(row["Kegiatan"]) || "Kegiatan 1",
+          question_type: isMultipleChoice ? "multiple_choice" : "essay",
+          prompt: text(row["Pertanyaan"]),
+          options: isMultipleChoice ? (options.length >= 2 ? options : ["", ""]) : [],
+          correct_answer: text(row["Jawaban benar"]),
+          max_score: Number.isFinite(score) && score > 0 ? score : 1,
+          rubric: text(row["Rubrik"]),
+        } satisfies LkpdQuestionDraft;
+      }).filter((question) => question.prompt || question.activity_title !== "Kegiatan 1");
+      if (!imported.length) throw new Error("Tidak ada baris soal yang dapat diimpor. Gunakan header dari template Excel.");
+      setPendingExcelImport({ fileName: file.name, questions: imported });
+    } catch (error) {
+      setNotice(error instanceof Error ? `Impor Excel gagal: ${error.message}` : "Impor Excel gagal. Gunakan berkas .xlsx, .xls, atau .csv dari template.");
+    }
+  };
   const openGrading = async (attempt: any) => { if (!supabase) return; const { data } = await supabase.from("attempt_answers").select("payload").eq("attempt_id", attempt.id).maybeSingle(); setGradingAttempt(attempt); setGradingAnswers(data?.payload ?? {}); setGradeValues({}); };
   const gradeEssay = async (question: any) => { if (!supabase || !gradingAttempt) return; const value = gradeValues[question.id]; const score = Number(value?.score); if (!Number.isFinite(score)) { setNotice("Masukkan nilai esai yang valid."); return; } const { error } = await supabase.functions.invoke("grade-activity-essay", { body: { attempt_id: gradingAttempt.id, question_id: question.id, score, comment: value?.comment ?? "" } }); if (error) { setNotice("Nilai belum dapat disimpan. Periksa batas nilai dan akses admin."); return; } setNotice("Nilai esai tersimpan."); setGradingAttempt(null); if (definitionId) { const { data } = await supabase.from("activity_attempts").select("id,student_full_name,student_class,student_school,status,finalized_at,attempt_results(final_score,review_status)").eq("activity_version_id", definitionId).order("created_at", { ascending: false }); setAttempts(data ?? []); } };
   const save = async (publicationStatus: "draft" | "published") => {
@@ -1771,7 +1905,14 @@ function LkpdEditorRoute({ moduleTitle, onBack }: { moduleTitle: string; onBack:
       setNotice(error instanceof Error && error.message === "timeout" ? (publicationStatus === "draft" ? "Draf tersimpan di browser, tetapi server tidak merespons dalam 8 detik." : "Penyimpanan tidak merespons. Periksa koneksi atau Supabase, lalu coba lagi.") : "Penyimpanan gagal. Periksa koneksi database lalu coba lagi.");
     } finally { setSaving(false); }
   };
-  if (!loading) return <LkpdGroupedEditor moduleTitle={lkpdTitle} onTitleChange={setLkpdTitle} questions={questions} setQuestions={setQuestions} saving={saving} notice={notice} onSave={(status) => void save(status)} onBack={onBack} attempts={attempts} />;
+  const confirmExcelImport = () => {
+    if (!pendingExcelImport) return;
+    setQuestions(pendingExcelImport.questions);
+    setNotice(`${pendingExcelImport.questions.length} soal dari ${pendingExcelImport.fileName} berhasil diimpor. Klik Simpan draf atau Publikasikan LKPD untuk menyimpan.`);
+    setPendingExcelImport(null);
+  };
+  if (!loading) return <><LkpdGroupedEditor moduleTitle={lkpdTitle} onTitleChange={setLkpdTitle} questions={questions} setQuestions={setQuestions} saving={saving} notice={notice} onSave={(status) => void save(status)} onImportExcel={(file) => void importQuestionsFromExcel(file)} onBack={onBack} attempts={attempts} />
+    {pendingExcelImport && <div className="modal-backdrop lkpd-import-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setPendingExcelImport(null); }}><section className="confirm-modal lkpd-import-modal" role="dialog" aria-modal="true" aria-labelledby="lkpd-import-title"><div className="lkpd-import-icon" aria-hidden="true"><FileText /></div><p className="eyebrow">IMPOR SOAL LKPD</p><h2 id="lkpd-import-title">Gunakan soal dari Excel?</h2><p>Berkas <strong>{pendingExcelImport.fileName}</strong> berisi <strong>{pendingExcelImport.questions.length} soal</strong>. Soal yang sedang ada akan digantikan.</p><div className="lkpd-import-summary"><span>Langkah berikutnya</span><strong>Periksa hasil impor, lalu simpan draf atau publikasikan LKPD.</strong></div><div className="confirm-actions"><button className="button quiet" type="button" onClick={() => setPendingExcelImport(null)}>Batal</button><button className="button primary" type="button" onClick={confirmExcelImport}>Ya, impor soal</button></div></section></div>}</>;
   return <AdminInfoShell active="activity" eyebrow="PENYUSUNAN LKPD" title={moduleTitle}>
     <section className="panel activity-results"><div className="panel-heading"><div><p className="eyebrow">SOAL UNTUK SISWA</p><h2>LKPD {moduleTitle}</h2><p>Pilihan ganda dinilai otomatis; uraian masuk antrean penilaian manual.</p></div><button type="button" className="button secondary" onClick={onBack}>Kembali</button></div>
     {loading ? <LoadingState label="Memuat LKPD…" /> : <><div className="activity-table-wrap"><ol className="lkpd-question-list">{questions.map((question, index) => <li key={index} className="panel"><div className="panel-heading"><strong>Soal {index + 1}</strong><button type="button" className="button secondary" disabled={questions.length === 1} onClick={() => setQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index))}>Hapus</button></div><label>Jenis soal<select value={question.question_type} onChange={(event) => updateQuestion(index, { question_type: event.target.value as LkpdQuestionDraft["question_type"], correct_answer: "", options: event.target.value === "essay" ? [] : ["", ""] })}><option value="multiple_choice">Pilihan ganda</option><option value="essay">Uraian</option></select></label><label>Pertanyaan<textarea value={question.prompt} onChange={(event) => updateQuestion(index, { prompt: event.target.value })} /></label><label>Bobot nilai<input type="number" min="1" max="1000" value={question.max_score} onChange={(event) => updateQuestion(index, { max_score: Number(event.target.value) })} /></label>{question.question_type === "multiple_choice" ? <><label>Pilihan jawaban{question.options.map((option, optionIndex) => <input key={optionIndex} value={option} placeholder={`Pilihan ${optionIndex + 1}`} onChange={(event) => updateQuestion(index, { options: question.options.map((value, currentIndex) => currentIndex === optionIndex ? event.target.value : value) })} />)}</label><button type="button" className="button secondary" disabled={question.options.length >= 8} onClick={() => updateQuestion(index, { options: [...question.options, ""] })}>Tambah pilihan</button><label>Jawaban benar<select value={question.correct_answer} onChange={(event) => updateQuestion(index, { correct_answer: event.target.value })}><option value="">Pilih jawaban benar</option>{question.options.filter(Boolean).map((option) => <option key={option} value={option}>{option}</option>)}</select></label></> : <label>Rubrik penilaian (opsional)<textarea value={question.rubric} onChange={(event) => updateQuestion(index, { rubric: event.target.value })} /></label>}</li>)}</ol></div><div className="panel-heading"><button type="button" className="button secondary" onClick={() => setQuestions((current) => [...current, newLkpdQuestion()])}>Tambah soal</button><div><button type="button" className="button secondary" disabled={saving} onClick={() => void save("draft")}>Simpan draf</button> <button type="button" className="button primary" disabled={saving} onClick={() => void save("published")}>{saving ? "Menyimpan…" : "Publikasikan LKPD"}</button></div></div>{notice && <p role="status">{notice}</p>}</>}</section>
@@ -1782,7 +1923,20 @@ function LkpdEditorRoute({ moduleTitle, onBack }: { moduleTitle: string; onBack:
 
 function QrLkpdEditorRoute() {
   const navigate = useNavigate(); const { moduleTitle } = useParams();
-  return <LkpdEditorRoute moduleTitle={decodeURIComponent(moduleTitle || "E-Modul")} onBack={() => navigate("/admin/qr-code")} />;
+  const routeValue = decodeURIComponent(moduleTitle || "E-Modul");
+  const [stableSlug, setStableSlug] = useState(routeValue);
+  useEffect(() => {
+    setStableSlug(routeValue);
+    if (!supabase) return;
+    let active = true;
+    void (async () => {
+      let response = await supabase.from("activity_definitions").select("public_slug").eq("public_slug", bookSlug(routeValue)).maybeSingle();
+      if (!response.data) response = await supabase.from("activity_definitions").select("public_slug").eq("title", routeValue).maybeSingle();
+      if (active && response.data?.public_slug) setStableSlug(response.data.public_slug);
+    })();
+    return () => { active = false; };
+  }, [routeValue]);
+  return <LkpdEditorRoute moduleTitle={stableSlug} onBack={() => navigate("/admin/qr-code")} />;
 }
 
 function QrCodeRoute() {
@@ -1805,7 +1959,7 @@ function QrCodeRoute() {
   const [shownQr, setShownQr] = useState<{ id: string; title: string; target: string } | null>(null);
   const [savedMedia, setSavedMedia] = useState<Array<{ id: string; title: string; public_url: string }>>([]);
   const [savedLkpd, setSavedLkpd] = useState<Array<{ id: string; title: string; public_slug: string | null; status: string }>>([]);
-  const [localLkpd, setLocalLkpd] = useState<Array<{ id: string; title: string; public_slug: string; status: string }>>([]);
+  const [localLkpd, setLocalLkpd] = useState<Array<{ id: string; title: string; public_slug: string; status: string; isEmpty: boolean }>>([]);
   const [deletingLkpdId, setDeletingLkpdId] = useState("");
   const [pendingDeleteLkpd, setPendingDeleteLkpd] = useState<{ id: string; title: string; public_slug: string | null; status: string } | null>(null);
   const [collectionBooks, setCollectionBooks] = useState(() => {
@@ -1820,10 +1974,10 @@ function QrCodeRoute() {
   const qrRows = collectionBooks
     .filter((book) => publicationStatuses[book.title] === "Terpublikasi")
     .map((book) => ({ ...book, id: bookSlug(book.title), target: `${window.location.origin}/read/${bookSlug(book.title)}` }));
-  const lkpdRows = [...savedLkpd, ...localLkpd.filter((local) => !savedLkpd.some((saved) => saved.public_slug === local.public_slug))];
+  const lkpdRows = [...savedLkpd, ...localLkpd.filter((local) => !savedLkpd.some((saved) => saved.public_slug === local.public_slug) && !(local.isEmpty && savedLkpd.some((saved) => saved.title.trim().toLocaleLowerCase("id-ID") === local.title.trim().toLocaleLowerCase("id-ID"))))];
   useEffect(() => {
-    const drafts: Array<{ id: string; title: string; public_slug: string; status: string }> = [];
-    for (let index = 0; index < window.localStorage.length; index += 1) { const key = window.localStorage.key(index) ?? ""; if (!key.startsWith("flipbook-studio-lkpd-draft-")) continue; try { const draft = JSON.parse(window.localStorage.getItem(key) ?? "{}"); const public_slug = key.replace("flipbook-studio-lkpd-draft-", ""); if (Array.isArray(draft.questions)) drafts.push({ id: `local-${public_slug}`, title: draft.title || public_slug.replace(/-/g, " "), public_slug, status: "local" }); } catch { /* abaikan data draf yang rusak */ } }
+    const drafts: Array<{ id: string; title: string; public_slug: string; status: string; isEmpty: boolean }> = [];
+    for (let index = 0; index < window.localStorage.length; index += 1) { const key = window.localStorage.key(index) ?? ""; if (!key.startsWith("flipbook-studio-lkpd-draft-")) continue; try { const draft = JSON.parse(window.localStorage.getItem(key) ?? "{}"); const public_slug = key.replace("flipbook-studio-lkpd-draft-", ""); if (Array.isArray(draft.questions)) drafts.push({ id: `local-${public_slug}`, title: draft.title || public_slug.replace(/-/g, " "), public_slug, status: "local", isEmpty: draft.questions.every((question: LkpdQuestionDraft) => !String(question.prompt ?? "").trim()) }); } catch { /* abaikan data draf yang rusak */ } }
     setLocalLkpd(drafts);
     const refresh = () => {
       try {

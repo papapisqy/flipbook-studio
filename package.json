@@ -22,7 +22,8 @@
     "react-pageflip": "^2.0.3",
     "react-router-dom": "^7.18.5",
     "typescript": "latest",
-    "vite": "latest"
+    "vite": "latest",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/react": "latest",

@@ -1,0 +1,74 @@
+.lkpd-import-backdrop {
+  background: rgba(39, 73, 71, 0.54) !important;
+}
+
+.lkpd-import-modal {
+  width: min(500px, calc(100vw - 2rem));
+  border: 0;
+  border-left: 8px solid #58aaa9;
+  border-radius: 22px;
+  background-color: #fffdf8;
+  background-image: repeating-linear-gradient(to bottom, transparent 0, transparent 39px, #e9dfd2 40px, #e9dfd2 41px);
+  color: #51342b;
+  box-shadow: 0 24px 80px rgba(44, 69, 72, 0.36);
+}
+
+.lkpd-import-modal .eyebrow { color: #336f74; }
+.lkpd-import-modal h2 { color: #51342b; font-family: Georgia, serif; font-size: 2rem; font-style: italic; }
+.lkpd-import-modal > p:not(.eyebrow) { color: #705e55; line-height: 1.6; }
+.lkpd-import-modal strong { color: #315e62; }
+
+.lkpd-import-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  margin-bottom: 0.85rem;
+  border-radius: 15px;
+  background: #dff2ee;
+  color: #39777b;
+  box-shadow: 0 7px 16px rgba(57, 119, 123, 0.17);
+}
+
+.lkpd-import-icon svg { width: 27px; height: 27px; }
+
+.lkpd-import-summary {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 1.2rem;
+  border: 1px dashed #9dcfc6;
+  border-radius: 12px;
+  background: rgba(235, 248, 244, 0.88);
+  padding: 0.85rem 1rem;
+}
+
+.lkpd-import-summary span { color: #39777b; font-size: 0.74rem; font-weight: 800; letter-spacing: 0.07em; text-transform: uppercase; }
+.lkpd-import-summary strong { font-size: 0.92rem; }
+.lkpd-import-modal .button.quiet { background: #fffdf8; border-color: #cfe3e1; color: #32666c; }
+.lkpd-import-modal .button.primary { background: #4c9ba1; border-color: #3f8e94; box-shadow: 0 5px 12px rgba(43, 119, 125, 0.22); }
+
+/* Judul LKPD mengikuti lebar area editor, sementara tombol Kembali tetap di kanan. */
+.lkpd-grouped-editor > .panel-heading > div:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.lkpd-grouped-editor .lkpd-title-field {
+  width: 100%;
+}
+
+.lkpd-grouped-editor .lkpd-title-field input {
+  width: 100%;
+  max-width: none;
+}
+
+/* Pesan hasil impor tidak boleh mengunci area kerja. State React tetap
+   membersihkannya; animasi ini adalah pengaman bila browser lambat merender. */
+.lkpd-save-actions > span:not(:empty) {
+  pointer-events: none;
+  animation: lkpd-toast-autohide .45s ease 3s forwards;
+}
+
+@keyframes lkpd-toast-autohide {
+  to { opacity: 0; transform: translateY(12px); visibility: hidden; }
+}

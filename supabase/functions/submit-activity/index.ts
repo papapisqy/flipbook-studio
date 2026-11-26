@@ -1,7 +1,7 @@
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
 const client = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { persistSession: false } })
-const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173').split(',').map(x => x.trim()).filter(Boolean))
+const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:4173,http://localhost:5173').split(',').map(x => x.trim()).filter(Boolean))
 const MAX_BODY_BYTES = 32 * 1024
 const MAX_ANSWERS = 50
 const MAX_ANSWER_LENGTH = 4_000
@@ -10,8 +10,9 @@ const validAnswers = (value: unknown): value is Record<string, string> => Boolea
 
 Deno.serve(async request => {
   const origin = request.headers.get('origin') ?? ''
-  if (origin && !origins.has(origin)) return reply({ error: 'origin_not_allowed' }, 403)
-  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type,x-activity-session' } })
+  const isLocalOrigin = /^http:\/\/localhost(?::\d+)?$/.test(origin)
+  if (origin && !origins.has(origin) && !isLocalOrigin) return reply({ error: 'origin_not_allowed' }, 403, origin)
+  if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: { 'access-control-allow-origin': origin, 'access-control-allow-methods': 'POST, OPTIONS', 'access-control-allow-headers': 'content-type, apikey, authorization, x-client-info, x-supabase-api-version, x-activity-session', vary: 'Origin' } })
   if (request.method !== 'POST') return reply({ error: 'method_not_allowed' }, 405, origin)
   if (Number(request.headers.get('content-length') ?? 0) > MAX_BODY_BYTES) return reply({ error: 'request_too_large' }, 413, origin)
   try {
