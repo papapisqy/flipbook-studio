@@ -4,8 +4,13 @@ const projectUrl = import.meta.env.VITE_SUPABASE_URL
 const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
 const SESSION_ONLY_MARKER = 'flipbook-studio-session-only'
 
+const isPublicReaderPath = () => /^\/(siswa\/flipbook|read|lkpd)(?:\/|$)/.test(window.location.pathname)
+
 const authStorage = {
   getItem(key: string) {
+    // A student's QR link is public and never needs an administrator session.
+    // Avoid attempting to refresh a stale admin token in that browser context.
+    if (isPublicReaderPath()) return null
     return window.sessionStorage.getItem(key) ?? window.localStorage.getItem(key)
   },
   setItem(key: string, value: string) {

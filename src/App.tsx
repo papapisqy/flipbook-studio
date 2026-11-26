@@ -5439,13 +5439,18 @@ function PdfFlipbook({
   const [localMagnifierEnabled, setLocalMagnifierEnabled] = useState(false);
   const [lensRadius, setLensRadius] = useState(() => window.innerWidth <= 700 ? 85 : 110);
   const [lensCornerRadius, setLensCornerRadius] = useState(50);
+  const [currentPage, setCurrentPage] = useState(0);
   const [lens, setLens] = useState<{ src: string; x: number; y: number; backgroundX: number; backgroundY: number; backgroundWidth: number; backgroundHeight: number } | null>(null);
   const zoomPercent = controlledZoomPercent ?? localZoomPercent;
   const magnifierEnabled = controlledMagnifierEnabled ?? localMagnifierEnabled;
   useEffect(() => { if (!magnifierEnabled) setLens(null); }, [magnifierEnabled]);
-  const [pageHeight, setPageHeight] = useState(() => Math.max(420, Math.floor(window.innerHeight * 0.98) - 84));
+  const [viewportWidth, setViewportWidth] = useState(() => window.innerWidth);
+  const [pageHeight, setPageHeight] = useState(() => Math.max(420, Math.floor(window.innerHeight * 0.98) - (window.innerWidth <= 700 ? 146 : 84)));
   useEffect(() => {
-    const resize = () => setPageHeight(Math.max(420, Math.floor(window.innerHeight * 0.98) - 84));
+    const resize = () => {
+      setViewportWidth(window.innerWidth);
+      setPageHeight(Math.max(420, Math.floor(window.innerHeight * 0.98) - (window.innerWidth <= 700 ? 146 : 84)));
+    };
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
   }, []);
@@ -5546,7 +5551,10 @@ function PdfFlipbook({
       ? [selectedCover, ...pages.slice(1)]
       : [selectedCover, ...pages]
     : pages;
-  const pageWidth = Math.max(280, Math.min(Math.round(pageHeight * 0.707), Math.floor((window.innerWidth - 32) / 2)));
+  const isPortrait = viewportWidth <= 700;
+  const pageWidth = isPortrait
+    ? Math.max(280, Math.min(Math.round(pageHeight * 0.707), viewportWidth - 24))
+    : Math.max(280, Math.min(Math.round(pageHeight * 0.707), Math.floor((viewportWidth - 32) / 2)));
   const moveLens = (event: any) => {
     if (!magnifierEnabled) { setLens(null); return; }
     if (event.buttons) { setLens(null); return; }
@@ -5559,17 +5567,23 @@ function PdfFlipbook({
     const scale = zoomPercent / 100;
     setLens({ src: image.currentSrc || image.src, x: event.clientX - stageRect.left, y: event.clientY - stageRect.top, backgroundX: lensRadius - offsetX * scale, backgroundY: lensRadius - offsetY * scale, backgroundWidth: rect.width * scale, backgroundHeight: rect.height * scale });
   };
+  const turnPage = (direction: "previous" | "next") => {
+    const pageFlip = flipRef.current?.pageFlip?.();
+    if (!pageFlip) return;
+    if (direction === "previous") pageFlip.flipPrev();
+    else pageFlip.flipNext();
+  };
   return (
     <div ref={stageRef} className="flipbook-stage flipbook-zoom-stage" onMouseDownCapture={(event) => { pointerStartRef.current = { x: event.clientX, y: event.clientY }; }} onMouseMove={magnifierEnabled ? moveLens : undefined} onMouseLeave={() => setLens(null)}>
       {typeof controlledMagnifierEnabled === "undefined" && <div className="flipbook-zoom-control"><button type="button" className={magnifierEnabled ? "is-active" : ""} onClick={(event) => { event.stopPropagation(); setLocalMagnifierEnabled((enabled) => !enabled); setLens(null); }}>{magnifierEnabled ? "Kaca pembesar aktif" : "Aktifkan kaca pembesar"}</button>{magnifierEnabled && <label>Zoom <select value={zoomPercent} onClick={(event) => event.stopPropagation()} onChange={(event) => setLocalZoomPercent(Number(event.target.value))}><option value={125}>125%</option><option value={150}>150%</option><option value={175}>175%</option><option value={200}>200%</option></select></label>}</div>}
       {magnifierEnabled && <div className="flipbook-lens-size-control"><label>Ukuran <input type="range" min="85" max="400" step="5" value={lensRadius} onChange={(event) => setLensRadius(Number(event.target.value))} aria-label="Ukuran kaca pembesar" /><output>{lensRadius}px</output></label><label>Sudut <input type="range" min="0" max="50" step="1" value={lensCornerRadius} onChange={(event) => setLensCornerRadius(Number(event.target.value))} aria-label="Kelengkungan sudut kaca pembesar" /><output>{lensCornerRadius}%</output></label></div>}
-      <div className="flipbook-scale-wrap"><HTMLFlipBook ref={flipRef} width={pageWidth} height={pageHeight} size="stretch" minWidth={pageWidth} maxWidth={pageWidth} minHeight={pageHeight} maxHeight={pageHeight} showCover drawShadow flippingTime={900} usePortrait={false} showPageCorners={false} disableFlipByClick clickEventForward={false} className="flipbook" startPage={0}>
+      <div className="flipbook-scale-wrap"><HTMLFlipBook key={isPortrait ? "portrait" : "spread"} ref={flipRef} width={pageWidth} height={pageHeight} size="stretch" minWidth={pageWidth} maxWidth={pageWidth} minHeight={pageHeight} maxHeight={pageHeight} showCover drawShadow flippingTime={900} usePortrait={isPortrait} showPageCorners={false} disableFlipByClick clickEventForward={false} className="flipbook" startPage={0} onFlip={(event: { data: number }) => setCurrentPage(event.data)}>
         {flipbookPages.map((page, index) => {
           const sourcePageIndex = selectedCover ? (coverPlacement === "replace" ? index : index - 1) : index;
           return <div className="flip-page" key={`${title}-${index}`}><img src={page} alt={index === 0 && selectedCover ? `${title} sampul` : `${title} halaman ${index + 1}`} />{sourcePageIndex >= 0 && (qrRegions[sourcePageIndex] ?? []).map((qr, qrIndex) => <button key={`${index}-${qrIndex}`} type="button" className="pdf-qr-hotspot" aria-label="Buka media dari QR atau barcode" style={{ left: `${qr.left}%`, top: `${qr.top}%`, width: `${qr.width}%`, height: `${qr.height}%` }} onPointerDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onMouseDown={(event) => { event.preventDefault(); event.stopPropagation(); }} onTouchStart={(event) => { event.preventDefault(); event.stopPropagation(); }} onClick={(event) => { event.preventDefault(); event.stopPropagation(); setActiveQr(qr.data); }} />)}</div>;
         })}
       </HTMLFlipBook></div>
-      <div className="pdf-flipbook-navigation" aria-label="Navigasi halaman"><button type="button" className="button quiet" onClick={() => flipRef.current?.pageFlip?.().flipPrev("bottom")}>Sebelumnya</button><button type="button" className="button primary" onClick={() => flipRef.current?.pageFlip?.().flipNext("bottom")}>Berikutnya</button></div>
+      <div className="pdf-flipbook-navigation" aria-label="Navigasi halaman"><button type="button" className="button quiet" disabled={currentPage <= 0} onClick={(event) => { event.preventDefault(); event.stopPropagation(); turnPage("previous"); }}>Sebelumnya</button><span className="flipbook-page-status" aria-live="polite">{currentPage + 1} / {flipbookPages.length}</span><button type="button" className="button primary" disabled={currentPage >= flipbookPages.length - 1} onClick={(event) => { event.preventDefault(); event.stopPropagation(); turnPage("next"); }}>Berikutnya</button></div>
       {lens && <span className="flipbook-magnifier" aria-hidden="true" style={{ left: lens.x, top: lens.y, width: lensRadius * 2, height: lensRadius * 2, borderRadius: `${lensCornerRadius}%`, backgroundImage: `url("${lens.src}")`, backgroundSize: `${lens.backgroundWidth}px ${lens.backgroundHeight}px`, backgroundPosition: `${lens.backgroundX}px ${lens.backgroundY}px` }} />}
       {activeQr && <div className="modal-backdrop pdf-qr-modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) setActiveQr(null); }}><section className="confirm-modal qr-media-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-qr-title"><p className="eyebrow">MEDIA DARI QR / BARCODE</p><h2 id="pdf-qr-title">Konten pembelajaran</h2>{youtubeEmbedUrl(activeQr) ? <iframe className="pdf-qr-player" src={youtubeEmbedUrl(activeQr)} title="Video dari QR atau barcode" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen /> : /\.(mp3|wav|ogg|m4a)(?:$|\?)/i.test(activeQr) ? <audio className="pdf-qr-audio" controls src={activeQr}>Browser Anda tidak mendukung pemutar audio.</audio> : /\.(mp4|webm)(?:$|\?)/i.test(activeQr) ? <video className="pdf-qr-player" controls src={activeQr}>Browser Anda tidak mendukung pemutar video.</video> : <><p>Tautan hasil pemindaian siap dibuka.</p><a className="button primary" href={activeQr} target="_blank" rel="noreferrer">Buka tautan</a></>}<label className="share-link-field"><span>Tautan</span><input readOnly value={activeQr} /></label><div className="confirm-actions"><button className="button quiet" type="button" onClick={() => setActiveQr(null)}>Tutup</button></div></section></div>}
     </div>
