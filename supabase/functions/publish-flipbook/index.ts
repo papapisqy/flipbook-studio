@@ -1,6 +1,8 @@
 import { withSupabase } from 'npm:@supabase/server@1'
 
-const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://localhost:4173').split(',').map((value) => value.trim()).filter(Boolean))
+// Keep a safe production fallback for the deployed application. ALLOWED_ORIGINS
+// remains the source of truth and can add a custom domain or preview domains.
+const origins = new Set((Deno.env.get('ALLOWED_ORIGINS') ?? 'http://localhost:5173,http://localhost:4173,https://flipbook-studio-three.vercel.app').split(',').map((value) => value.trim()).filter(Boolean))
 const slugPattern = /^[a-z0-9]+(?:-[a-z0-9]+)*$/
 const json = (body: Record<string, unknown>, status = 200, origin = '') => Response.json(body, { status, headers: { 'content-type': 'application/json', ...(origin ? { 'access-control-allow-origin': origin, vary: 'Origin' } : {}) } })
 const validSnapshot = (value: unknown) => {

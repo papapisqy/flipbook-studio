@@ -7,6 +7,9 @@ comma-separated exact allowlist, for example:
 http://localhost:5173,https://your-project.vercel.app
 ```
 
+For the current production site, the value should include
+`https://flipbook-studio-three.vercel.app`.
+
 Include the production custom domain and only the Vercel preview domains that
 need to call these functions. Do not use `*` for authenticated admin routes.
 
